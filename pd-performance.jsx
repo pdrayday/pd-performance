@@ -121,7 +121,7 @@ function localSplit(daysStr, minsStr, focus, goal) {
       [fatLoss ? "Conditioning" : "Upper Pump", fatLoss ? "Intervals, sled and core circuit" : "Higher-rep pressing and pulling volume"],
     ],
     6: [
-      ["Legs", hyrox ? "Half Hyrox: 4 rounds of 0.7 mi run plus a station" : "Heavy lower: squat, press, extend"],
+      ["Legs", hyrox ? "Hyrox/CrossFit-style circuit: 4 rounds of 0.7 mi run plus a station" : "Heavy lower: squat, press, extend"],
       ["Chest & Biceps", "Push plus arms"],
       ["Back & Triceps", "Pull plus arms"],
       ["Light Legs & Shoulders", "Lighter loads, strict form, extra volume"],
@@ -186,7 +186,7 @@ ${(prefs.allergies || []).length ? `Strictly excluded (allergies): ${prefs.aller
 
 TRAINING DAYS
 ${mealLines(false)}
-Put your biggest carb meal after training. On Half-Hyrox Monday, add an extra carb portion at dinner.
+Put your biggest carb meal after training. On your hardest conditioning day, add an extra carb portion at dinner.
 
 REST DAY
 ${mealLines(true)}
@@ -207,7 +207,7 @@ function localBmiInsight(bmi, cat, goal, picCount, h, w) {
     "Lose fat": "For fat loss, hold a modest calorie deficit and protect your protein — the 6-day split gives you plenty of output, so let the diet do the cutting.",
     "Build muscle": "For building muscle, eat at a small surplus and chase progressive overload — add a rep or a little weight most weeks.",
     "Recomposition (lose fat + build muscle)": "For recomposition, keep calories near maintenance, protein high (about 1g per lb), and let training quality drive the change.",
-    "Hyrox / endurance performance": "For Hyrox performance, prioritize your Monday engine work and fuel it — carbs around sessions, and don't skimp on sleep.",
+    "Hyrox/CrossFit & endurance performance": "For Hyrox/CrossFit performance, prioritize your engine work and fuel it — carbs around sessions, and don't skimp on sleep.",
     "General health & strength": "For general health and strength, consistency is the whole game — hit your sessions, walk daily, and sleep 7+ hours.",
   }[goal] || "Pick a specific goal in your profile and the recommendations here get sharper.";
   parts.push(rec);
@@ -219,7 +219,7 @@ function localCoach(q, profile, dietPrefs) {
   const s = q.toLowerCase();
   const goal = profile.goal || "your goal";
   if (/(pace|pacing|run|running|mile)/.test(s))
-    return "For the Hyrox runs, go out at a pace you could hold for twice the distance — the stations punish anyone who redlines the first 0.7 mi. Aim for controlled runs where you can still push the sled hard, and treat the last run as the one you empty the tank on. Practice running on tired legs; that's the whole sport.";
+    return "For Hyrox/CrossFit-style circuits, go out at a pace you could hold for twice the distance — the stations punish anyone who redlines the first run. Aim for controlled runs where you can still push the sled hard, and treat the last run as the one you empty the tank on. Practice running on tired legs; that's the whole sport.";
   if (/(before|pre[- ]?workout|after|post[- ]?workout)/.test(s) && /(eat|food|meal|fuel)/.test(s))
     return `Eat a carb + protein meal 90 minutes to 2 hours before training — something like rice and chicken or oatmeal and eggs. After, get protein and carbs within a couple of hours. On Monday legs especially, don't train under-fueled — that session is your hardest of the week. Keep it consistent with your ${dietPrefs?.dietGoal?.toLowerCase() || "diet"} targets.`;
   if (/(eat|food|meal|protein|carb|diet|nutrition|calorie)/.test(s))
@@ -246,7 +246,7 @@ const HYROX = [
 ];
 
 const SPLIT = [
-  { day: "Monday", focus: "Legs", tag: "HALF HYROX", hyrox: true, exercises: [] },
+  { day: "Monday", focus: "Legs", tag: "HYROX / CROSSFIT", hyrox: true, exercises: [] },
   {
     day: "Tuesday", focus: "Chest & Biceps", tag: "PUSH + ARMS",
     exercises: [
@@ -390,7 +390,7 @@ const GrokLogo = ({ s = 14 }) => (
 );
 
 /* ---------- AI platform config (default: ChatGPT) ---------- */
-const AI_CONTEXT = "You are my PD Performance training assistant. I follow a 6-day split with Hyrox-style legs on Monday. Help me with training, nutrition, and recovery.";
+const AI_CONTEXT = "You are my PD Performance training assistant. I follow a push/pull muscle-building split with an optional Hyrox/CrossFit-style conditioning day. Help me with training, nutrition, and recovery.";
 const AI_PLATFORMS = [
   { id: "google", name: "Google", Logo: GoogleLogo, url: `https://www.google.com/search?udm=50&q=${encodeURIComponent(AI_CONTEXT)}` },
   { id: "chatgpt", name: "ChatGPT", Logo: ChatGPTLogo, url: `https://chatgpt.com/?q=${encodeURIComponent(`File this chat in my "pd performance" project folder. ${AI_CONTEXT}`)}` },
@@ -402,11 +402,11 @@ const AI_PLATFORMS = [
 const getPlatform = (id) => AI_PLATFORMS.find((p) => p.id === id) || AI_PLATFORMS.find((p) => p.id === "chatgpt");
 
 /* ---------- SEO / GEO content (rendered in footer + JSON-LD) ---------- */
-const SEO_DESC = "PD Performance is an online personal training program: a 6-day muscle-building split, Hyrox-style conditioning, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Plans from $250/month.";
+const SEO_DESC = "PD Performance is an online personal training program: a customizable muscle-building split, an optional Hyrox/CrossFit-style conditioning day, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Plans from $250/month.";
 const FAQS = [
   {
     q: "What is PD Performance?",
-    a: "PD Performance is an online personal training program built around a 6-day training split — Hyrox-style conditioning on Mondays plus push/pull muscle-building sessions — with AI-generated custom workout splits, personalized diet plans, daily accountability tracking, and a group community.",
+    a: "PD Performance is an online personal training program built around a customizable training split — push/pull muscle-building sessions with an optional Hyrox/CrossFit-style conditioning day — plus AI-generated custom workout splits, personalized diet plans, daily accountability tracking, and a group community.",
   },
   {
     q: "How much does online personal training with PD Performance cost?",
@@ -414,8 +414,22 @@ const FAQS = [
   },
   {
     q: "Do I get a custom workout and diet plan?",
-    a: "Yes. The app builds a custom weekly training split around your schedule, session length, and goal, and a personalized diet plan that accounts for foods you like, foods you avoid, and allergies — for fat loss, muscle gain, recomposition, or Hyrox and endurance performance.",
+    a: "Yes. The app builds a custom weekly training split around your schedule, session length, and goal, and a personalized diet plan that accounts for foods you like, foods you avoid, and allergies — for fat loss, muscle gain, recomposition, or Hyrox/CrossFit and endurance performance.",
   },
+];
+
+/* the most-asked training & health questions in the industry — shown on the FAQ page */
+const INDUSTRY_FAQS = [
+  { q: "How many days a week should I work out?", a: "3 to 6, depending on your recovery and schedule. Beginners do great on 3 full-body days; more experienced lifters can split across 4–6. More days aren't automatically better — consistency and recovery are what drive progress." },
+  { q: "How much protein do I need?", a: "A practical target is 0.7–1 gram per pound of bodyweight per day (about 1.6–2.2 g/kg), spread across your meals. It supports muscle growth, keeps you full, and protects muscle while dieting." },
+  { q: "Cardio or weights for fat loss?", a: "A calorie deficit drives fat loss — training decides what you keep. Lifting preserves muscle so the weight you lose is fat; cardio adds calorie burn and heart health. The best results come from both, with the diet doing the heavy lifting." },
+  { q: "How long until I see results?", a: "Strength climbs within 2–4 weeks, visible muscle changes usually take 8–12 weeks of consistent training and eating, and sustainable fat loss runs about 0.5–2 lb per week. Photos and measurements show progress before the mirror does." },
+  { q: "Can I lose fat and build muscle at the same time?", a: "Yes — especially if you're newer to lifting, returning after a break, or carrying extra body fat. Keep protein high, train hard with progressive overload, and hold a small calorie deficit or maintenance intake." },
+  { q: "Should I take creatine?", a: "Creatine monohydrate is the most-researched supplement in sports nutrition — 3–5 g daily supports strength, power, and muscle. It's considered safe for healthy adults; check with your doctor if you have kidney conditions." },
+  { q: "Do I need to be sore for a workout to count?", a: "No. Soreness mostly reflects novelty, not effectiveness. Progress comes from progressive overload — gradually adding weight, reps, or quality sets — not from chasing pain." },
+  { q: "How much sleep do I need?", a: "7–9 hours. Sleep is when you actually recover and grow — it improves strength, hormone balance, appetite control, and injury resistance. It's the cheapest performance enhancer there is." },
+  { q: "What's the best diet?", a: "The one you can stick to. Anchor every meal on protein, build around mostly whole foods, and set calories to match your goal. Keto, fasting, and macro tracking all work when they create the right calorie balance for you." },
+  { q: "How much water should I drink?", a: "A good starting point is about half your bodyweight in ounces per day (a 180 lb person: ~90 oz), adding more around training and sweat-heavy sessions. Pale-yellow urine is the simple check." },
 ];
 
 /* ---------- small UI atoms ---------- */
@@ -553,7 +567,7 @@ function ProfileTab({ profile, setProfile, plan, setPlan, trainerCfg, progress, 
     const pics = [bmiPhotos.front, bmiPhotos.back, bmiPhotos.side].filter(Boolean);
     try {
       const prompt = `You are an encouraging but honest personal-training assistant doing a body-composition check-in.
-Client stats: height ${h} in, weight ${w} lb, BMI ${bmi.toFixed(1)} (${bmiCat}). Goal: ${draft.goal || "general fitness"}. Trains 6 days/week (Hyrox-style legs Monday, push/pull split).
+Client stats: height ${h} in, weight ${w} lb, BMI ${bmi.toFixed(1)} (${bmiCat}). Goal: ${draft.goal || "general fitness"}. Trains 6 days/week (push/pull split with an optional Hyrox/CrossFit-style conditioning day).
 ${pics.length > 0 ? `${pics.length} physique photo${pics.length > 1 ? "s are" : " is"} attached (from the front/back/side set). Use them to give a visual estimate of body-fat percentage range and where they carry muscle vs fat, and explain how that changes the BMI interpretation (muscular people often read 'overweight' on BMI).` : "No photos attached — interpret the BMI number alone and note its limits."}
 In 4-5 short sentences: give your assessment, then one concrete recommendation toward their goal. Plain language, no headers or bullet points. Note this is a visual estimate, not a medical measurement.`;
       const content = [...pics.map(dataUrlToImageBlock), { type: "text", text: prompt }];
@@ -617,7 +631,7 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
               <option>Lose fat</option>
               <option>Build muscle</option>
               <option>Recomposition (lose fat + build muscle)</option>
-              <option>Hyrox / endurance performance</option>
+              <option>Hyrox/CrossFit & endurance performance</option>
               <option>General health & strength</option>
             </select>
           </Field>
@@ -994,7 +1008,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                 <option>Build muscle</option>
                 <option>Lose fat</option>
                 <option>Strength</option>
-                <option>Hyrox / endurance</option>
+                <option>Hyrox/CrossFit / endurance</option>
                 <option>Athletic performance</option>
               </select>
             </Field>
@@ -1140,7 +1154,7 @@ function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan }) {
         {
           role: "user",
           content: `You are a nutrition coach. Build a simple weekly diet plan in plain language.
-Client: goal ${profile.goal || "general fitness"}, weight ${profile.weightLb || "?"} lb, trains 6 days/week (heavy Hyrox-style legs Monday).
+Client: goal ${profile.goal || "general fitness"}, weight ${profile.weightLb || "?"} lb, trains 6 days/week (push/pull split, optional Hyrox/CrossFit-style conditioning day).
 Diet goal: ${prefs.dietGoal}. ${mealLine}
 Foods they like: ${prefs.likes || "no preference"}.
 Foods to avoid (dislikes): ${prefs.dislikes || "none"}.
@@ -1589,7 +1603,7 @@ function CoachTab({ profile, dietPrefs, plan }) {
     setInput("");
     setLoading(true);
     try {
-      const context = `You are the in-app AI coach for a personal training program. The program is a 6-day split: Mon legs (Half Hyrox: 4 rounds of 0.7mi run + station — sled push 8x45lb plates 2 lengths, sled pull 5 plates 2 lengths, burpees 3.5 distances, lunges 70lb 4 distances), Tue chest/biceps, Wed back/triceps, Thu light legs/shoulders, Fri chest/biceps, Sat back/triceps, Sun rest.
+      const context = `You are the in-app AI coach for a personal training program. The default program is a 6-day split: Mon legs (optional Hyrox/CrossFit-style circuit: 4 rounds of 0.7mi run + station — sled push 8x45lb plates 2 lengths, sled pull 5 plates 2 lengths, burpees 3.5 distances, lunges 70lb 4 distances), Tue chest/biceps, Wed back/triceps, Thu light legs/shoulders, Fri chest/biceps, Sat back/triceps, Sun rest. Clients can also build a custom split without the Hyrox day.
 Client profile: ${JSON.stringify(profile)}. Diet prefs: ${JSON.stringify(dietPrefs)}. Plan: ${plan?.id || "none yet"}.
 Answer questions and give recommendations tied to their goals. Be direct, encouraging, plain language, no markdown formatting, keep answers under 150 words unless asked for detail. For medical issues, recommend a professional.`;
       const apiMsgs = [
@@ -1717,10 +1731,133 @@ function TrainerPanel({ trainerCfg, setTrainerCfg, onClose, bookings }) {
 }
 
 /* ====================================================================== */
+/* SITE PAGES — About / FAQ / Pricing                                     */
+/* ====================================================================== */
+const FaqItem = ({ q, a }) => (
+  <details style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "12px 14px" }}>
+    <summary style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{q}</summary>
+    <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.65, marginTop: 8, marginBottom: 0 }}>{a}</p>
+  </details>
+);
+
+function AboutPage({ onStart }) {
+  const bullets = [
+    ["The program", "A push/pull muscle-building split you can run 3 to 6 days a week, with an optional Hyrox/CrossFit-style conditioning day for people who want an engine, not just a physique."],
+    ["The app", "Custom split builder, personalized diet plans built around foods you actually eat, weigh-in and photo tracking, daily commitments with streaks, and a private group feed."],
+    ["The coaching", "Your trainer posts video demos, reviews your progress, and is available for weekly one-on-one in-person sessions on any plan."],
+    ["The AI", "A built-in coaching engine answers questions and builds your split and diet instantly — and you can connect your favorite AI platform (ChatGPT, Claude, Gemini, and more) for deeper dives."],
+  ];
+  return (
+    <div className="space-y-5">
+      <Card>
+        <Eyebrow>About PD Performance</Eyebrow>
+        <p style={{ ...fontBody, color: PAPER, fontSize: 15, lineHeight: 1.7, marginTop: 12 }}>
+          PD Performance is an online personal training program built on one idea: consistency beats complexity. No gimmicks, no 45-supplement stacks — a proven training split, food you'll actually eat, and accountability that keeps you showing up.
+        </p>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.7, marginTop: 10 }}>
+          Whether your goal is fat loss, building muscle, recomposition, or Hyrox/CrossFit and endurance performance, the program meets you where you are and scales with you.
+        </p>
+      </Card>
+      <Card>
+        <Eyebrow>How it works</Eyebrow>
+        <div className="mt-3 space-y-3">
+          {bullets.map(([t, d]) => (
+            <div key={t}>
+              <div style={{ ...fontDisplay, color: PAPER, fontSize: 13, letterSpacing: "0.08em" }} className="uppercase">{t}</div>
+              <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.6, marginTop: 4, marginBottom: 0 }}>{d}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5">
+          <Btn onClick={onStart}>Start in the app <ChevronRight size={14} /></Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function FaqPage({ onStart }) {
+  return (
+    <div className="space-y-5">
+      <Card>
+        <Eyebrow>FAQ · Training & health basics</Eyebrow>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.6, marginTop: 8 }}>
+          Straight answers to the questions everyone asks — no fads, no bro-science.
+        </p>
+        <div className="mt-3 space-y-2">
+          {INDUSTRY_FAQS.map((f) => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+        </div>
+      </Card>
+      <Card>
+        <Eyebrow>FAQ · The program</Eyebrow>
+        <div className="mt-3 space-y-2">
+          {FAQS.map((f) => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+        </div>
+        <div className="mt-5">
+          <Btn onClick={onStart}>Join the program <ChevronRight size={14} /></Btn>
+        </div>
+      </Card>
+      <p style={{ ...fontBody, color: MUTED, fontSize: 11, lineHeight: 1.6 }}>
+        This page is general education, not medical advice. Check with a healthcare professional before starting a new training or nutrition program, especially with existing conditions or injuries.
+      </p>
+    </div>
+  );
+}
+
+function PricingPage({ onStart }) {
+  return (
+    <div className="space-y-5">
+      <Card>
+        <Eyebrow>Pricing</Eyebrow>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
+          Commit longer, pay less per month. Every plan includes the full app, custom programming, and diet planning.
+        </p>
+        <div className="space-y-3 mt-4">
+          {PLANS.map((p) => (
+            <div key={p.id} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 14 }}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">{p.name}</div>
+                  <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{p.sub}</div>
+                </div>
+                <div className="text-right">
+                  <div style={{ ...fontMono, color: RED, fontSize: 22 }}>${p.price}</div>
+                  <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{p.per}</div>
+                </div>
+              </div>
+              <ul className="mt-2 space-y-1">
+                {p.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
+                    <Check size={12} color={RED} /> {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4" style={{ border: `1px dashed ${LINE}`, borderRadius: 12, padding: 14 }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ADDON.name}</div>
+              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{ADDON.note}</div>
+            </div>
+            <div style={{ ...fontMono, color: PAPER, fontSize: 16 }}>+${ADDON.price}/mo</div>
+          </div>
+        </div>
+        <div className="mt-5">
+          <Btn onClick={onStart}>Choose your plan in the app <ChevronRight size={14} /></Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ====================================================================== */
 /* APP SHELL                                                              */
 /* ====================================================================== */
 export default function App() {
   const [tab, setTab] = useState("profile");
+  const [page, setPage] = useState("home");
   const [loaded, setLoaded] = useState(false);
 
   const [profile, setProfileState] = useState({ name: "", age: "", heightIn: "", weightLb: "", goal: "", addon: false, aiPlatform: "chatgpt" });
@@ -1816,7 +1953,7 @@ export default function App() {
         },
         {
           "@type": "FAQPage",
-          mainEntity: FAQS.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+          mainEntity: [...INDUSTRY_FAQS, ...FAQS].map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
         },
       ],
     });
@@ -1877,7 +2014,8 @@ export default function App() {
       `}</style>
 
       {/* header */}
-      <header className="sticky top-0 flex items-center justify-between px-5 py-4" style={{ background: "var(--ink-glass)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${LINE}`, zIndex: 50 }}>
+      <header className="sticky top-0" style={{ background: "var(--ink-glass)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${LINE}`, zIndex: 50 }}>
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <h1 className="flex items-baseline gap-2" style={{ margin: 0 }} aria-label="PD Performance — online personal training">
           <span style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
           <span style={{ color: RED, fontWeight: 700, fontSize: 20, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
@@ -1914,6 +2052,21 @@ export default function App() {
             </span>
           </button>
         </div>
+      </div>
+
+      {/* site navigation */}
+      <nav aria-label="Site" className="flex gap-5 px-5 pb-2">
+        {[["home", "Home"], ["about", "About"], ["faq", "FAQ"], ["pricing", "Pricing"]].map(([id, label]) => (
+          <button key={id} onClick={() => setPage(id)}
+            style={{
+              ...fontDisplay, fontSize: 11, letterSpacing: "0.14em", background: "none", border: "none", cursor: "pointer",
+              padding: "4px 0", color: page === id ? RED : MUTED,
+              borderBottom: `2px solid ${page === id ? RED : "transparent"}`,
+            }} className="uppercase">
+            {label}
+          </button>
+        ))}
+      </nav>
       </header>
 
       {/* content */}
@@ -1922,6 +2075,12 @@ export default function App() {
           <div className="flex items-center gap-2 justify-center pt-16" style={{ ...fontMono, color: MUTED, fontSize: 13 }}>
             <RefreshCw size={14} className="animate-spin" /> loading…
           </div>
+        ) : page !== "home" ? (
+          <>
+            {page === "about" && <AboutPage onStart={() => { setPage("home"); setTab("profile"); }} />}
+            {page === "faq" && <FaqPage onStart={() => { setPage("home"); setTab("profile"); }} />}
+            {page === "pricing" && <PricingPage onStart={() => { setPage("home"); setTab("profile"); }} />}
+          </>
         ) : (
           <>
             {tab === "profile" && (
@@ -1936,28 +2095,31 @@ export default function App() {
             {tab === "track" && <AccountabilityTab commitments={commitments} setCommitments={setCommitments} />}
             {tab === "groups" && <GroupsTab profile={profile} posts={posts} setPosts={setPosts} />}
 
-            {/* SEO / GEO footer — about + FAQ */}
-            <footer style={{ marginTop: 36, borderTop: `1px solid ${LINE}`, paddingTop: 18 }}>
-              <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>
-                {SEO_DESC}
-              </p>
-              <div className="mt-3 space-y-2">
-                {FAQS.map((f) => (
-                  <details key={f.q} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-                    <summary style={{ ...fontBody, color: PAPER, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{f.q}</summary>
-                    <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 8, marginBottom: 0 }}>{f.a}</p>
-                  </details>
-                ))}
-              </div>
-              <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 14 }}>
-                PD Performance · Online personal training, Hyrox conditioning, custom workout splits & diet plans
-              </p>
-            </footer>
+            {/* SEO / GEO footer — profile tab only */}
+            {tab === "profile" && (
+              <footer style={{ marginTop: 36, borderTop: `1px solid ${LINE}`, paddingTop: 18 }}>
+                <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>
+                  {SEO_DESC}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {FAQS.map((f) => (
+                    <details key={f.q} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
+                      <summary style={{ ...fontBody, color: PAPER, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{f.q}</summary>
+                      <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 8, marginBottom: 0 }}>{f.a}</p>
+                    </details>
+                  ))}
+                </div>
+                <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 14 }}>
+                  PD Performance · Online personal training, optional Hyrox/CrossFit-style conditioning, custom workout splits & diet plans
+                </p>
+              </footer>
+            )}
           </>
         )}
       </main>
 
-      {/* bottom nav */}
+      {/* bottom nav — app tabs, home page only */}
+      {page === "home" && (
       <nav aria-label="Primary" className="fixed bottom-0 left-0 right-0 flex justify-center" style={{ background: "var(--ink-glass2)", backdropFilter: "blur(10px)", borderTop: `1px solid ${LINE}`, zIndex: 50 }}>
         <div className="flex w-full" style={{ maxWidth: 640 }}>
           {tabs.map((t) => {
@@ -1973,6 +2135,7 @@ export default function App() {
           })}
         </div>
       </nav>
+      )}
 
       {/* AI coach overlay */}
       {showCoach && (
