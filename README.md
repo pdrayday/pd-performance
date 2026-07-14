@@ -13,6 +13,10 @@ Personal training app — 6-day split (Hyrox-style legs Monday, push/pull), AI-g
 - **Dark/light theme** — light mode is an exact inversion of dark
 - **Trainer mode** — PIN-protected settings for payments, calendar, and video uploads
 
+## Live site
+
+https://pdrayday.github.io/pd-performance/ — runs entirely in the browser with a built-in coaching engine (no external AI required); when hosted in an environment that provides Claude API access, AI features automatically upgrade.
+
 ## Stack
 
 Single-file React component (`pd-performance.jsx`), lucide-react icons, Claude API for AI features.

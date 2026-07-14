@@ -19,18 +19,26 @@ const fontDisplay = { fontFamily: "'Oswald', sans-serif" };
 const fontBody = { fontFamily: "'Inter', sans-serif" };
 const fontMono = { fontFamily: "'IBM Plex Mono', monospace" };
 
-/* ---------- storage helpers (never localStorage) ---------- */
+/* ---------- storage helpers (host storage when available, localStorage on the web) ---------- */
 const sget = async (k, shared = false) => {
   try {
-    const r = await window.storage.get(k, shared);
-    return r ? JSON.parse(r.value) : null;
+    if (typeof window !== "undefined" && window.storage?.get) {
+      const r = await window.storage.get(k, shared);
+      return r ? JSON.parse(r.value) : null;
+    }
+    const v = localStorage.getItem(`pt-web:${k}`);
+    return v ? JSON.parse(v) : null;
   } catch {
     return null;
   }
 };
 const sset = async (k, v, shared = false) => {
   try {
-    await window.storage.set(k, JSON.stringify(v), shared);
+    if (typeof window !== "undefined" && window.storage?.set) {
+      await window.storage.set(k, JSON.stringify(v), shared);
+    } else {
+      localStorage.setItem(`pt-web:${k}`, JSON.stringify(v));
+    }
   } catch (e) {
     console.error("storage error", e);
   }
@@ -57,7 +65,7 @@ const compressImage = (file, maxW = 600, quality = 0.65) =>
     reader.readAsDataURL(file);
   });
 
-/* ---------- Claude API helpers ---------- */
+/* ---------- Claude API helpers (used when the host provides API access; otherwise the built-in engine below takes over) ---------- */
 async function askClaude(messages, maxTokens = 1000) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -68,14 +76,166 @@ async function askClaude(messages, maxTokens = 1000) {
       messages,
     }),
   });
+  if (!res.ok) throw new Error(`api ${res.status}`);
   const data = await res.json();
-  return (data.content || []).map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
+  const txt = (data.content || []).map((b) => (b.type === "text" ? b.text : "")).join("\n").trim();
+  if (!txt) throw new Error("empty response");
+  return txt;
 }
 
 const dataUrlToImageBlock = (dataUrl) => ({
   type: "image",
   source: { type: "base64", media_type: "image/jpeg", data: dataUrl.split(",")[1] },
 });
+
+/* ====================================================================== */
+/* BUILT-IN COACHING ENGINE — runs fully inside the app, no external AI.  */
+/* Used automatically whenever the Claude API isn't available (e.g. the   */
+/* public web version).                                                   */
+/* ====================================================================== */
+const WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const TRAIN_DAY_IDX = { 3: [0, 2, 4], 4: [0, 1, 3, 4], 5: [0, 1, 2, 3, 4], 6: [0, 1, 2, 3, 4, 5] };
+
+function localSplit(daysStr, minsStr, focus, goal) {
+  const d = Math.min(Math.max(parseInt(daysStr, 10) || 6, 3), 6);
+  const short = (parseInt(minsStr, 10) || 60) <= 45;
+  const hyrox = /hyrox|endurance/i.test(focus);
+  const fatLoss = /fat/i.test(focus);
+  const sessions = {
+    3: [
+      ["Full Body A", "Squat focus plus push and pull compounds"],
+      ["Full Body B", "Hinge focus plus presses and rows"],
+      ["Full Body C", hyrox ? "Engine day: intervals, sled work, burpee circuit" : "Volume day: weak points and arms"],
+    ],
+    4: [
+      ["Upper A", "Heavy presses and rows"],
+      ["Lower A", "Squat focus, quads and calves"],
+      ["Upper B", "Pull focus, shoulders and arms"],
+      ["Lower B", hyrox ? "Hyrox engine: runs, sled push/pull, walking lunges" : "Hinge focus, hamstrings and glutes"],
+    ],
+    5: [
+      ["Legs", hyrox ? "Half Hyrox circuit plus heavy lower work" : "Quad-dominant lower session"],
+      ["Chest & Biceps", "Presses first, curls after"],
+      ["Back & Triceps", "Rows and pulldowns, then pushdowns and dips"],
+      ["Shoulders & Arms", "Overhead press, lateral raises, arm supersets"],
+      [fatLoss ? "Conditioning" : "Upper Pump", fatLoss ? "Intervals, sled and core circuit" : "Higher-rep pressing and pulling volume"],
+    ],
+    6: [
+      ["Legs", hyrox ? "Half Hyrox: 4 rounds of 0.7 mi run plus a station" : "Heavy lower: squat, press, extend"],
+      ["Chest & Biceps", "Push plus arms"],
+      ["Back & Triceps", "Pull plus arms"],
+      ["Light Legs & Shoulders", "Lighter loads, strict form, extra volume"],
+      ["Chest & Biceps", "Push plus arms, higher reps"],
+      ["Back & Triceps", "Pull plus arms, higher reps"],
+    ],
+  }[d];
+  const idx = TRAIN_DAY_IDX[d];
+  const days = WEEK.map((day, i) => {
+    const s = idx.indexOf(i);
+    return s >= 0
+      ? { day, focus: sessions[s][0], notes: sessions[s][1] + (short ? " — superset accessories to stay inside your time cap" : "") }
+      : { day, focus: "Rest", notes: "Walk, stretch, hydrate — recovery is where the growth happens" };
+  });
+  return {
+    days,
+    summary: `A ${d}-day week built for ${focus.toLowerCase()} at roughly ${minsStr} minutes per session. Add a little weight or a rep most weeks — progressive overload on this structure is what moves you toward ${goal || "your goal"}.`,
+  };
+}
+
+const MEAL_LIB = {
+  breakfast: ["eggs with oatmeal and berries", "greek yogurt with granola and honey", "protein shake with banana and peanut butter", "egg-white omelet with toast and fruit"],
+  lunch: ["grilled chicken with rice and vegetables", "lean ground beef bowl with potatoes", "turkey wrap with a side salad", "salmon with quinoa and greens"],
+  dinner: ["steak with sweet potato and asparagus", "chicken thighs with pasta and broccoli", "shrimp stir-fry over rice", "pork tenderloin with roasted vegetables"],
+  snack: ["cottage cheese with pineapple", "a protein bar and an apple", "beef jerky and almonds", "rice cakes with peanut butter"],
+};
+const MEAL_SLOTS = { 1: ["dinner"], 2: ["lunch", "dinner"], 3: ["breakfast", "lunch", "dinner"], 4: ["breakfast", "lunch", "snack", "dinner"], 5: ["breakfast", "snack", "lunch", "snack", "dinner"], 6: ["breakfast", "snack", "lunch", "snack", "dinner", "snack"] };
+const GOAL_CAL_PER_LB = { "Fat loss (cut)": 11.5, Maintain: 14, "Muscle gain (bulk)": 16, Recomposition: 13 };
+
+function localDiet(profile, prefs) {
+  const w = parseFloat(profile.weightLb) || 180;
+  const goal = prefs.dietGoal || "Maintain";
+  const cal = Math.round(((GOAL_CAL_PER_LB[goal] || 14) * w) / 50) * 50;
+  const protein = Math.round(w);
+  const banned = [
+    ...(prefs.allergies || []).map((a) => a.toLowerCase().trim()),
+    ...(prefs.dislikes || "").toLowerCase().split(",").map((s) => s.trim()),
+  ].filter(Boolean);
+  const ok = (food) => !banned.some((b) => food.toLowerCase().includes(b));
+  const pick = (slot, n = 2) => {
+    const opts = MEAL_LIB[slot].filter(ok);
+    return (opts.length ? opts : ["a lean protein with a carb and vegetables you tolerate"]).slice(0, n);
+  };
+  const n = parseInt(prefs.mealsPerDay, 10);
+  if (n === 0) {
+    return `Overview: you're running a fasting protocol at about ${cal} calories and ${protein}g protein on eating days. Hold the fast with water, black coffee, and electrolytes (sodium, potassium, magnesium), and break it gently.
+
+FASTING DAYS
+Keep electrolytes up and stay busy through hunger waves — they pass. Light walking is fine; save hard sessions for eating days when possible.
+
+REFEED / EATING DAYS
+Break the fast with protein first — for example ${pick("lunch", 1)[0]}. Then eat normal whole-food meals to your ${cal}-calorie target, protein at every meal, and stop a couple hours before bed. If training fasted, put most carbs in the meal after your session.
+
+${(prefs.allergies || []).length ? `Strictly excluded (allergies): ${prefs.allergies.join(", ")}. ` : ""}General guidance — adjust portions weekly based on the scale trend.`;
+  }
+  const slots = MEAL_SLOTS[Math.min(Math.max(n || 3, 1), 6)];
+  const mealLines = (restDay) => slots.map((slot, i) => {
+    const opts = pick(slot);
+    return `Meal ${i + 1} (${slot}): ${opts[0]}${opts[1] ? `, or ${opts[1]}` : ""}${restDay && slot === "snack" ? " (halve this on rest days)" : ""}`;
+  }).join("\n");
+  return `Overview: aim for about ${cal} calories and ${protein}g protein daily for ${goal.toLowerCase()} at ${w} lb, spread over ${slots.length} meals. ${prefs.likes ? `Your staples — ${prefs.likes} — fit anywhere below; swap them in freely.` : "Swap in equivalent foods you enjoy — adherence beats perfection."}
+
+TRAINING DAYS
+${mealLines(false)}
+Put your biggest carb meal after training. On Half-Hyrox Monday, add an extra carb portion at dinner.
+
+REST DAY
+${mealLines(true)}
+Drop roughly 200 calories, mostly from carbs — keep protein identical.
+
+${(prefs.allergies || []).length ? `Strictly excluded (allergies): ${prefs.allergies.join(", ")}. ` : ""}${prefs.schedule ? `Schedule note: ${prefs.schedule} — prep meals the night before where that bites. ` : ""}Weigh in weekly and adjust portions by the trend, not by a single day.`;
+}
+
+function localBmiInsight(bmi, cat, goal, picCount, h, w) {
+  const parts = [`Your BMI comes out to ${bmi.toFixed(1)} at ${h}" and ${w} lb — the ${cat.toLowerCase()}.`];
+  parts.push(
+    cat === "Overweight" || cat === "Obese range"
+      ? "Keep in mind BMI can't tell muscle from fat — people who train hard routinely read one category high, so treat it as a single data point rather than a verdict."
+      : "BMI is a blunt tool — it says nothing about how much of that weight is muscle, so pair it with photos and how your training is progressing."
+  );
+  if (picCount > 0) parts.push(`You've attached ${picCount} photo${picCount > 1 ? "s" : ""} — the built-in engine can't read them visually, but keep taking them weekly in the same spot and lighting; the mirror trend beats the scale.`);
+  const rec = {
+    "Lose fat": "For fat loss, hold a modest calorie deficit and protect your protein — the 6-day split gives you plenty of output, so let the diet do the cutting.",
+    "Build muscle": "For building muscle, eat at a small surplus and chase progressive overload — add a rep or a little weight most weeks.",
+    "Recomposition (lose fat + build muscle)": "For recomposition, keep calories near maintenance, protein high (about 1g per lb), and let training quality drive the change.",
+    "Hyrox / endurance performance": "For Hyrox performance, prioritize your Monday engine work and fuel it — carbs around sessions, and don't skimp on sleep.",
+    "General health & strength": "For general health and strength, consistency is the whole game — hit your sessions, walk daily, and sleep 7+ hours.",
+  }[goal] || "Pick a specific goal in your profile and the recommendations here get sharper.";
+  parts.push(rec);
+  parts.push("This is an estimate from your numbers, not a medical measurement.");
+  return parts.join(" ");
+}
+
+function localCoach(q, profile, dietPrefs) {
+  const s = q.toLowerCase();
+  const goal = profile.goal || "your goal";
+  if (/(pace|pacing|run|running|mile)/.test(s))
+    return "For the Hyrox runs, go out at a pace you could hold for twice the distance — the stations punish anyone who redlines the first 0.7 mi. Aim for controlled runs where you can still push the sled hard, and treat the last run as the one you empty the tank on. Practice running on tired legs; that's the whole sport.";
+  if (/(before|pre[- ]?workout|after|post[- ]?workout)/.test(s) && /(eat|food|meal|fuel)/.test(s))
+    return `Eat a carb + protein meal 90 minutes to 2 hours before training — something like rice and chicken or oatmeal and eggs. After, get protein and carbs within a couple of hours. On Monday legs especially, don't train under-fueled — that session is your hardest of the week. Keep it consistent with your ${dietPrefs?.dietGoal?.toLowerCase() || "diet"} targets.`;
+  if (/(eat|food|meal|protein|carb|diet|nutrition|calorie)/.test(s))
+    return `Anchor every meal on protein — about 1g per pound of bodyweight daily — then fill in carbs around training and keep fats moderate. Your Fuel tab can build the full plan around foods you actually like. For ${goal.toLowerCase()}, adherence beats any perfect macro split, so build meals you'll repeat without willpower.`;
+  if (/(sore|pain|hurt|injur|tweak)/.test(s))
+    return "Normal soreness fades in 48–72 hours and eases once you warm up — sharp, joint-specific, or one-sided pain does not. Train around it, not through it: swap the aggravating movement, drop the load, and if it persists more than a week or affects daily life, see a physio or doctor. Protecting a lift for a week beats losing a limb of training for months.";
+  if (/(miss|skip|busy|only.*days|fewer|can'?t train)/.test(s))
+    return "If the week shrinks, protect Monday legs first — it drives the most adaptation — then keep one push and one pull day. Cut the lighter volume days (Thursday first). Three hard, focused sessions beat six rushed ones; pick up the split where you left off rather than doubling up.";
+  if (/(sleep|recover|rest|tired|fatigue)/.test(s))
+    return "Recovery is where the growth happens: 7–9 hours of sleep, protein at every meal, and easy walking on rest days. If you're dragging for multiple sessions in a row, take an extra rest day — one deload day costs nothing; weeks of half-effort sessions cost a lot.";
+  if (/(plateau|stuck|stall|not (losing|gaining|growing))/.test(s))
+    return `Plateaus break with one variable at a time. Check the boring stuff first: are you actually adding weight or reps weekly, and is your food tracked honestly? For ${goal.toLowerCase()}, adjust calories by ~150–200 in the right direction, hold it two weeks, and judge by the trend — not a single weigh-in.`;
+  if (/(lose|cut|fat|weight loss)/.test(s))
+    return "Fat loss is a diet problem with a training safeguard: modest deficit, protein around 1g per pound, and keep lifting heavy so the weight you lose is fat, not muscle. The 6-day split already gives you output — resist the urge to add cardio before the diet is dialed.";
+  return `Good question. With your goal set to ${goal.toLowerCase()}, the fundamentals are: hit the split consistently, progress something every week, protein at about 1g per pound, and sleep 7+. Ask me about pacing, food timing, soreness, plateaus, or what to cut on a short week — or use the AI button up top for a deeper dive with your preferred AI platform.`;
+}
 
 /* ---------- static program data ---------- */
 const HYROX = [
@@ -400,7 +560,8 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
       const txt = await askClaude([{ role: "user", content }], 1000);
       setBmiNote(txt);
     } catch {
-      setBmiNote("Couldn't reach the AI right now — try again in a moment.");
+      /* built-in engine takes over when external AI is unavailable */
+      setBmiNote(localBmiInsight(bmi, bmiCat, draft.goal, pics.length, h, w));
     }
     setBmiLoading(false);
   };
@@ -790,7 +951,8 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
       const parsed = JSON.parse(clean);
       setCustomSplit(parsed);
     } catch {
-      alert("Couldn't build the split right now — try again.");
+      /* built-in engine takes over when external AI is unavailable */
+      setCustomSplit(localSplit(bDays, bMins, bFocus, profile.goal));
     }
     setBuilding(false);
   };
@@ -989,7 +1151,8 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
       ], 1500);
       setDietPlan(txt);
     } catch {
-      alert("Couldn't generate the plan right now — try again.");
+      /* built-in engine takes over when external AI is unavailable */
+      setDietPlan(localDiet(profile, prefs));
     }
     setLoading(false);
   };
@@ -1437,7 +1600,8 @@ Answer questions and give recommendations tied to their goals. Be direct, encour
       const txt = await askClaude(apiMsgs, 800);
       setMsgs([...next, { role: "assistant", content: txt }]);
     } catch {
-      setMsgs([...next, { role: "assistant", content: "I couldn't connect just now — try again in a moment." }]);
+      /* built-in engine takes over when external AI is unavailable */
+      setMsgs([...next, { role: "assistant", content: localCoach(q, profile, dietPrefs) }]);
     }
     setLoading(false);
   };
@@ -1716,6 +1880,11 @@ export default function App() {
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             style={{ background: "transparent", border: `1px solid ${LINE}`, borderRadius: 8, padding: "5px 7px", cursor: "pointer", display: "flex", alignItems: "center" }}>
             {theme === "dark" ? <Sun size={13} color={MUTED} /> : <Moon size={13} color={MUTED} />}
+          </button>
+          <button onClick={() => setShowCoach(true)} className="flex items-center gap-1" title="Built-in AI coach" aria-label="Open the built-in AI coach"
+            style={{ background: RED, border: `1px solid ${RED}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
+            <MessageCircle size={13} color={PAPER} />
+            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase">Coach</span>
           </button>
           <button onClick={() => window.open(aiPlatform.url, "_blank")} className="flex items-center gap-1"
             title={aiPlatform.id === "chatgpt" ? 'Opens ChatGPT — "pd performance" folder' : `Ask ${aiPlatform.name}`}
