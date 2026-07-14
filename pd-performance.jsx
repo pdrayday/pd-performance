@@ -383,9 +383,13 @@ const PerplexityLogo = ({ s = 14 }) => (
   </svg>
 );
 const GrokLogo = ({ s = 14 }) => (
-  <svg viewBox="0 0 24 24" width={s} height={s} aria-hidden="true" fill="none" stroke={PAPER} strokeWidth="2.1" strokeLinecap="round">
-    <circle cx="12" cy="12" r="7.4" />
-    <line x1="18.6" y1="3.2" x2="5.4" y2="20.8" />
+  /* ring broken where a tapered blade slashes through, tips extending past the circle */
+  <svg viewBox="0 0 24 24" width={s} height={s} aria-hidden="true">
+    <g stroke={PAPER} strokeWidth="2.5" fill="none" strokeLinecap="round">
+      <path d="M14.39 5.42 A7 7 0 0 0 5.42 14.39" />
+      <path d="M9.61 18.58 A7 7 0 0 0 18.58 9.61" />
+    </g>
+    <path fill={PAPER} d="M21 3 Q10.16 10.16 3 21 Q13.84 13.84 21 3 Z" />
   </svg>
 );
 
