@@ -537,7 +537,7 @@ function PhotoSlot({ label, photo, onPick, onClear }) {
 /* ====================================================================== */
 /* TAB 1 — PROFILE                                                        */
 /* ====================================================================== */
-function ProfileTab({ profile, setProfile, plan, setPlan, trainerCfg, progress, setProgress, addBooking }) {
+function ProfileTab({ profile, setProfile, progress, setProgress, session, onSignOut }) {
   const [draft, setDraft] = useState(profile);
   const [saved, setSaved] = useState(false);
   const [bmiNote, setBmiNote] = useState("");
@@ -578,17 +578,6 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
       setBmiNote(localBmiInsight(bmi, bmiCat, draft.goal, pics.length, h, w));
     }
     setBmiLoading(false);
-  };
-
-  const total = (p) => p.monthly + (draft.addon ? ADDON.price : 0);
-  const payVenmo = (p) => {
-    const handle = trainerCfg.venmo || "your-trainer";
-    const note = encodeURIComponent(`${p.name} plan${draft.addon ? " + trainer access" : ""}`);
-    window.open(`https://venmo.com/u/${handle}?txn=pay&amount=${total(p)}&note=${note}`, "_blank");
-  };
-  const payStripe = (p) => {
-    if (trainerCfg.stripe) window.open(trainerCfg.stripe, "_blank");
-    else alert("Your trainer hasn't connected a Stripe payment link yet. Use Venmo for now.");
   };
 
   const addWeighIn = () => {
@@ -787,105 +776,17 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
         )}
       </Card>
 
-      {/* membership */}
-      <Card>
-        <Eyebrow>Membership</Eyebrow>
-        <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
-          Commit longer, pay less per month. Switch plans anytime as your goals change.
-        </p>
-        <div className="space-y-3 mt-4">
-          {PLANS.map((p) => {
-            const active = plan?.id === p.id;
-            return (
-              <div key={p.id} onClick={() => setPlan({ id: p.id, addon: draft.addon })}
-                style={{ background: active ? SURFACE2 : "transparent", border: `1px solid ${active ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">{p.name}</div>
-                    <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{p.sub}</div>
-                  </div>
-                  <div className="text-right">
-                    <div style={{ ...fontMono, color: active ? RED : PAPER, fontSize: 22 }}>${p.price}</div>
-                    <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{p.per}</div>
-                  </div>
-                </div>
-                <ul className="mt-2 space-y-1">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
-                      <Check size={12} color={RED} /> {f}
-                    </li>
-                  ))}
-                </ul>
-                {active && (
-                  <div style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.15em", marginTop: 8 }} className="uppercase">Current plan</div>
-                )}
-              </div>
-            );
-          })}
+      {/* account */}
+      {session && (
+        <div className="flex items-center justify-between" style={{ padding: "2px 4px" }}>
+          <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
+            Signed in{session.provider !== "guest" ? ` with ${session.provider === "google" ? "Google" : "Apple"}` : " as guest"}
+          </span>
+          <button onClick={onSignOut} style={{ ...fontBody, background: "none", border: "none", color: MUTED, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+            Sign out
+          </button>
         </div>
-
-        {/* payment */}
-        {plan && (
-          <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
-            <div className="flex items-baseline justify-between">
-              <Eyebrow>Due now</Eyebrow>
-              <div style={{ ...fontMono, color: PAPER, fontSize: 28 }}>
-                ${total(PLANS.find((p) => p.id === plan.id))}
-                <span style={{ fontSize: 12, color: MUTED }}> {PLANS.find((p) => p.id === plan.id).flat ? "flat" : "/mo"}</span>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-3">
-              <Btn onClick={() => payVenmo(PLANS.find((p) => p.id === plan.id))} style={{ flex: 1, justifyContent: "center" }}>
-                Pay with Venmo
-              </Btn>
-              <Btn variant="ghost" onClick={() => payStripe(PLANS.find((p) => p.id === plan.id))} style={{ flex: 1, justifyContent: "center" }}>
-                <CreditCard size={14} /> Card (Stripe)
-              </Btn>
-            </div>
-          </div>
-        )}
-
-        {/* in-person session add-on — bottom of card, every plan */}
-        <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
-          <div
-            onClick={() => {
-              const nd = { ...draft, addon: !draft.addon };
-              setDraft(nd);
-              setProfile(nd);
-              if (plan) setPlan({ ...plan, addon: nd.addon });
-            }}
-            className="flex items-center justify-between"
-            style={{ border: `1px dashed ${draft.addon ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: "pointer" }}
-          >
-            <div>
-              <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ADDON.name}</div>
-              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{ADDON.note}</div>
-            </div>
-            <div style={{ ...fontMono, color: draft.addon ? RED : PAPER, fontSize: 16 }}>+${ADDON.price}/mo</div>
-          </div>
-          {draft.addon && (
-            <div className="mt-3">
-              <Btn
-                onClick={() => {
-                  addBooking({
-                    id: Date.now().toString(),
-                    name: draft.name?.trim() || "Client",
-                    date: new Date().toISOString(),
-                  });
-                  if (trainerCfg.calendar) window.open(trainerCfg.calendar, "_blank");
-                  alert("You're on the schedule — your trainer has been notified for this week.");
-                }}
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <CalendarDays size={14} /> Book this week's session
-              </Btn>
-              <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8 }}>
-                Booking puts you on your trainer's weekly schedule and opens the calendar to pick your time slot.
-              </p>
-            </div>
-          )}
-        </div>
-      </Card>
+      )}
     </div>
   );
 }
@@ -1731,6 +1632,115 @@ function TrainerPanel({ trainerCfg, setTrainerCfg, onClose, bookings }) {
 }
 
 /* ====================================================================== */
+/* LOGIN GATE — screen-recording-style preview + sign in                  */
+/* ====================================================================== */
+const AppleLogo = ({ s = 16 }) => (
+  <svg viewBox="0 0 24 24" width={s} height={s} aria-hidden="true">
+    <path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.03 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.56-1.702" />
+  </svg>
+);
+
+const PREVIEW_FRAMES = [
+  {
+    title: "Train smarter", icon: Dumbbell,
+    cap: "Follow your coach's split — or build a custom one with AI in seconds.",
+    rows: ["MON · Legs — Hyrox/CrossFit circuit", "TUE · Chest & biceps", "WED · Back & triceps", "THU · Light legs & shoulders"],
+  },
+  {
+    title: "Fuel it right", icon: Utensils,
+    cap: "Diet plans built around foods you actually eat — allergies excluded automatically.",
+    rows: ["2,400 cal · 185g protein daily", "Meal 1 — eggs, oatmeal, berries", "Meal 2 — chicken, rice, veggies", "Rest day: drop 200 calories"],
+  },
+  {
+    title: "Stay accountable", icon: CheckSquare,
+    cap: "Daily commitments, streaks, and reminders that keep you honest.",
+    rows: ["✓ Hit 150g protein — 12-day streak", "✓ 10k steps — 5/7 this week", "○ In bed by 10:30", "Reminder set · 30 min before 6 pm"],
+  },
+  {
+    title: "Coached 24/7", icon: MessageCircle,
+    cap: "A built-in AI coach that knows your program — plus your real trainer.",
+    rows: ["You: What do I eat before legs?", "Coach: Carbs + protein, 90 min out…", "You: How do I pace the runs?", "Coach: A pace you could hold twice…"],
+  },
+  {
+    title: "See the change", icon: Scale,
+    cap: "Weigh-ins, front/back/side photos, and trends that prove it's working.",
+    rows: ["Today · 182.4 lb (−6.2 lb total)", "Photos: front ✓ back ✓ side ✓", "BMI 24.1 · healthy range", "4-week trend ▁▂▄▆"],
+  },
+];
+
+function LoginGate({ onLogin }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setI((x) => (x + 1) % PREVIEW_FRAMES.length), 3200);
+    return () => clearInterval(iv);
+  }, []);
+  const f = PREVIEW_FRAMES[i];
+  const Icon = f.icon;
+  return (
+    <div className="fixed inset-0 overflow-y-auto" style={{ background: INK, zIndex: 80 }}>
+      <div className="mx-auto px-5 py-8 flex flex-col" style={{ maxWidth: 420, minHeight: "100%" }}>
+        <div className="flex items-baseline gap-2 justify-center">
+          <span style={{ ...fontDisplay, color: PAPER, fontSize: 24, fontWeight: 700, textTransform: "lowercase" }}>pd</span>
+          <span style={{ color: RED, fontWeight: 700, fontSize: 22, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
+          <span style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 500, letterSpacing: "0.18em" }}>PERFORMANCE</span>
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, textAlign: "center", marginTop: 6 }}>
+          Online personal training that actually sticks.
+        </p>
+
+        {/* screen-recording-style preview */}
+        <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 18, overflow: "hidden", marginTop: 22 }}>
+          <div className="flex gap-1" style={{ padding: "10px 12px 0" }}>
+            {PREVIEW_FRAMES.map((_, j) => (
+              <div key={j} style={{ flex: 1, height: 3, borderRadius: 99, background: j <= i ? RED : LINE, transition: "background .3s" }} />
+            ))}
+          </div>
+          <div style={{ padding: 18 }}>
+            <div className="flex items-center gap-2">
+              <Icon size={16} color={RED} />
+              <span style={{ ...fontDisplay, color: PAPER, fontSize: 15, letterSpacing: "0.08em" }} className="uppercase">{f.title}</span>
+              <span className="flex items-center gap-1" style={{ ...fontMono, marginLeft: "auto", color: MUTED, fontSize: 10 }}>
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: RED, display: "inline-block", animation: "pdblink 1.2s infinite" }} /> PREVIEW
+              </span>
+            </div>
+            <div className="mt-3 space-y-2" key={i} style={{ animation: "pdfade .45s ease" }}>
+              {f.rows.map((r, k) => (
+                <div key={k} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 9, padding: "9px 12px", ...fontBody, color: PAPER, fontSize: 12.5 }}>
+                  {r}
+                </div>
+              ))}
+            </div>
+            <p style={{ ...fontBody, color: MUTED, fontSize: 12.5, lineHeight: 1.55, marginTop: 12, marginBottom: 0 }}>{f.cap}</p>
+          </div>
+        </div>
+
+        {/* sign in */}
+        <div className="mt-6 space-y-3">
+          <button onClick={() => onLogin("google")}
+            className="w-full flex items-center justify-center gap-3"
+            style={{ ...fontBody, background: "#FFFFFF", color: "#1F1F1F", border: "1px solid #DADCE0", borderRadius: 12, padding: "12px 16px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+            <GoogleLogo s={18} /> Continue with Google
+          </button>
+          <button onClick={() => onLogin("apple")}
+            className="w-full flex items-center justify-center gap-3"
+            style={{ ...fontBody, background: PAPER, color: INK, border: `1px solid ${PAPER}`, borderRadius: 12, padding: "12px 16px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+            <AppleLogo s={18} /> Continue with Apple
+          </button>
+          <button onClick={() => onLogin("guest")}
+            className="w-full"
+            style={{ ...fontBody, background: "none", color: MUTED, border: "none", fontSize: 13, cursor: "pointer", padding: 6 }}>
+            Continue without an account
+          </button>
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 11, textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+          Your training data is stored privately on this device.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================== */
 /* SITE PAGES — About / FAQ / Pricing                                     */
 /* ====================================================================== */
 const FaqItem = ({ q, a }) => (
@@ -1794,7 +1804,7 @@ function FaqPage({ onStart }) {
           {FAQS.map((f) => <FaqItem key={f.q} q={f.q} a={f.a} />)}
         </div>
         <div className="mt-5">
-          <Btn onClick={onStart}>Join the program <ChevronRight size={14} /></Btn>
+          <Btn onClick={onStart}>See plans & pricing <ChevronRight size={14} /></Btn>
         </div>
       </Card>
       <p style={{ ...fontBody, color: MUTED, fontSize: 11, lineHeight: 1.6 }}>
@@ -1804,48 +1814,109 @@ function FaqPage({ onStart }) {
   );
 }
 
-function PricingPage({ onStart }) {
+function PricingPage({ plan, setPlan, profile, setProfile, trainerCfg, addBooking }) {
+  const total = (p) => p.monthly + (profile.addon ? ADDON.price : 0);
+  const payVenmo = (p) => {
+    const handle = trainerCfg.venmo || "your-trainer";
+    const note = encodeURIComponent(`${p.name} plan${profile.addon ? " + trainer access" : ""}`);
+    window.open(`https://venmo.com/u/${handle}?txn=pay&amount=${total(p)}&note=${note}`, "_blank");
+  };
+  const payStripe = (p) => {
+    if (trainerCfg.stripe) window.open(trainerCfg.stripe, "_blank");
+    else alert("Your trainer hasn't connected a Stripe payment link yet. Use Venmo for now.");
+  };
+  const toggleAddon = () => {
+    const np = { ...profile, addon: !profile.addon };
+    setProfile(np);
+    if (plan) setPlan({ ...plan, addon: np.addon });
+  };
+  const selected = plan ? PLANS.find((p) => p.id === plan.id) : null;
   return (
     <div className="space-y-5">
       <Card>
-        <Eyebrow>Pricing</Eyebrow>
+        <Eyebrow>Membership · Pricing</Eyebrow>
         <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
-          Commit longer, pay less per month. Every plan includes the full app, custom programming, and diet planning.
+          Commit longer, pay less per month. Every plan includes the full app, custom programming, and diet planning. Tap a plan to select it.
         </p>
         <div className="space-y-3 mt-4">
-          {PLANS.map((p) => (
-            <div key={p.id} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 14 }}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">{p.name}</div>
-                  <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{p.sub}</div>
+          {PLANS.map((p) => {
+            const active = plan?.id === p.id;
+            return (
+              <div key={p.id} onClick={() => setPlan({ id: p.id, addon: profile.addon })}
+                style={{ background: active ? SURFACE2 : "transparent", border: `1px solid ${active ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">{p.name}</div>
+                    <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{p.sub}</div>
+                  </div>
+                  <div className="text-right">
+                    <div style={{ ...fontMono, color: active ? RED : PAPER, fontSize: 22 }}>${p.price}</div>
+                    <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{p.per}</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div style={{ ...fontMono, color: RED, fontSize: 22 }}>${p.price}</div>
-                  <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{p.per}</div>
-                </div>
+                <ul className="mt-2 space-y-1">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
+                      <Check size={12} color={RED} /> {f}
+                    </li>
+                  ))}
+                </ul>
+                {active && (
+                  <div style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.15em", marginTop: 8 }} className="uppercase">Current plan</div>
+                )}
               </div>
-              <ul className="mt-2 space-y-1">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
-                    <Check size={12} color={RED} /> {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            );
+          })}
         </div>
-        <div className="mt-4" style={{ border: `1px dashed ${LINE}`, borderRadius: 12, padding: 14 }}>
-          <div className="flex items-center justify-between">
+
+        {/* payment */}
+        {selected && (
+          <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
+            <div className="flex items-baseline justify-between">
+              <Eyebrow>Due now</Eyebrow>
+              <div style={{ ...fontMono, color: PAPER, fontSize: 28 }}>
+                ${total(selected)}
+                <span style={{ fontSize: 12, color: MUTED }}> {selected.flat ? "flat" : "/mo"}</span>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-3 flex-wrap">
+              <Btn onClick={() => payVenmo(selected)} style={{ flex: 1, justifyContent: "center", minWidth: 140 }}>
+                Pay with Venmo
+              </Btn>
+              <Btn variant="ghost" onClick={() => payStripe(selected)} style={{ flex: 1, justifyContent: "center", minWidth: 140 }}>
+                <CreditCard size={14} /> Card (Stripe)
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {/* in-person session add-on */}
+        <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
+          <div onClick={toggleAddon} className="flex items-center justify-between gap-3"
+            style={{ border: `1px dashed ${profile.addon ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
             <div>
               <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ADDON.name}</div>
               <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{ADDON.note}</div>
             </div>
-            <div style={{ ...fontMono, color: PAPER, fontSize: 16 }}>+${ADDON.price}/mo</div>
+            <div style={{ ...fontMono, color: profile.addon ? RED : PAPER, fontSize: 16, whiteSpace: "nowrap" }}>+${ADDON.price}/mo</div>
           </div>
-        </div>
-        <div className="mt-5">
-          <Btn onClick={onStart}>Choose your plan in the app <ChevronRight size={14} /></Btn>
+          {profile.addon && (
+            <div className="mt-3">
+              <Btn
+                onClick={() => {
+                  addBooking({ id: Date.now().toString(), name: profile.name?.trim() || "Client", date: new Date().toISOString() });
+                  if (trainerCfg.calendar) window.open(trainerCfg.calendar, "_blank");
+                  alert("You're on the schedule — your trainer has been notified for this week.");
+                }}
+                style={{ width: "100%", justifyContent: "center" }}
+              >
+                <CalendarDays size={14} /> Book this week's session
+              </Btn>
+              <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8 }}>
+                Booking puts you on your trainer's weekly schedule and opens the calendar to pick your time slot.
+              </p>
+            </div>
+          )}
         </div>
       </Card>
     </div>
@@ -1875,14 +1946,15 @@ export default function App() {
   const [showTrainerPanel, setShowTrainerPanel] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
   const [theme, setThemeState] = useState("dark");
+  const [session, setSessionState] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [p, pl, dp, dpl, cm, vd, cs, pg, ps, tc, bk, th] = await Promise.all([
+      const [p, pl, dp, dpl, cm, vd, cs, pg, ps, tc, bk, th, se] = await Promise.all([
         sget("pt:profile"), sget("pt:plan"), sget("pt:diet-prefs"), sget("pt:diet-plan"),
         sget("pt:commitments"), sget("pt:videos", true), sget("pt:custom-split"),
         sget("pt:progress"), sget("pt:group-posts", true), sget("pt:trainer-cfg", true),
-        sget("pt:bookings", true), sget("pt:theme"),
+        sget("pt:bookings", true), sget("pt:theme"), sget("pt:session"),
       ]);
       if (p) setProfileState(p);
       if (pl) setPlanState(pl);
@@ -1896,6 +1968,7 @@ export default function App() {
       if (tc) setTrainerCfgState(tc);
       if (bk) setBookingsState(bk);
       if (th) setThemeState(th);
+      if (se) setSessionState(se);
       setLoaded(true);
     })();
   }, []);
@@ -1912,6 +1985,7 @@ export default function App() {
   const setBookings = (v) => { setBookingsState(v); sset("pt:bookings", v, true); };
   const setTrainerCfg = (v) => { setTrainerCfgState(v); sset("pt:trainer-cfg", v, true); };
   const setTheme = (v) => { setThemeState(v); sset("pt:theme", v); };
+  const setSession = (v) => { setSessionState(v); sset("pt:session", v); };
 
   /* declare color-scheme so browsers with forced/auto dark mode don't re-invert the light theme */
   useEffect(() => {
@@ -2006,6 +2080,15 @@ export default function App() {
           --ink-glass:rgba(245,245,244,0.95); --ink-glass2:rgba(245,245,244,0.96);
         }
         * { box-sizing: border-box; }
+        @keyframes pdfade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        @keyframes pdblink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+        /* phone-width header: icons only, smaller wordmark */
+        @media (max-width: 520px) {
+          .hdr-label { display: none !important; }
+          .brand-a { font-size: 17px !important; }
+          .brand-slash { font-size: 15px !important; }
+          .brand-b { font-size: 14px !important; letter-spacing: 0.12em !important; }
+        }
         ::selection { background: ${RED}; color: ${PAPER}; }
         select option { background: ${SURFACE2}; }
         input:focus, select:focus, textarea:focus { border-color: ${RED} !important; }
@@ -2017,9 +2100,9 @@ export default function App() {
       <header className="sticky top-0" style={{ background: "var(--ink-glass)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${LINE}`, zIndex: 50 }}>
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <h1 className="flex items-baseline gap-2" style={{ margin: 0 }} aria-label="PD Performance — online personal training">
-          <span style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
-          <span style={{ color: RED, fontWeight: 700, fontSize: 20, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
-          <span style={{ ...fontDisplay, color: PAPER, fontSize: 20, fontWeight: 500, letterSpacing: "0.18em" }}>PERFORMANCE</span>
+          <span className="brand-a" style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
+          <span className="brand-slash" style={{ color: RED, fontWeight: 700, fontSize: 20, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
+          <span className="brand-b" style={{ ...fontDisplay, color: PAPER, fontSize: 20, fontWeight: 500, letterSpacing: "0.18em" }}>PERFORMANCE</span>
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -2030,14 +2113,14 @@ export default function App() {
           <button onClick={() => setShowCoach(true)} className="flex items-center gap-1" title="Built-in AI coach" aria-label="Open the built-in AI coach"
             style={{ background: RED, border: `1px solid ${RED}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
             <MessageCircle size={13} color={PAPER} />
-            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase">Coach</span>
+            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase hdr-label">Coach</span>
           </button>
           <button onClick={() => window.open(aiPlatform.url, "_blank")} className="flex items-center gap-1"
             title={aiPlatform.id === "chatgpt" ? 'Opens ChatGPT — "pd performance" folder' : `Ask ${aiPlatform.name}`}
             aria-label={`Open your AI assistant (${aiPlatform.name})`}
             style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
             <AiLogo s={13} />
-            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase">AI</span>
+            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase hdr-label">AI</span>
           </button>
           {trainerMode && (
             <button onClick={() => setShowTrainerPanel(true)} style={{ background: "none", border: "none", cursor: "pointer" }} title="Trainer settings">
@@ -2047,7 +2130,7 @@ export default function App() {
           <button onClick={toggleTrainer} className="flex items-center gap-1" title={trainerMode ? "Exit trainer mode" : "Trainer sign-in"}
             style={{ background: trainerMode ? RED : "transparent", border: `1px solid ${trainerMode ? RED : LINE}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>
             {trainerMode ? <Unlock size={13} color={PAPER} /> : <Lock size={13} color={MUTED} />}
-            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: trainerMode ? PAPER : MUTED }} className="uppercase">
+            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: trainerMode ? PAPER : MUTED }} className="uppercase hdr-label">
               Trainer
             </span>
           </button>
@@ -2078,14 +2161,17 @@ export default function App() {
         ) : page !== "home" ? (
           <>
             {page === "about" && <AboutPage onStart={() => { setPage("home"); setTab("profile"); }} />}
-            {page === "faq" && <FaqPage onStart={() => { setPage("home"); setTab("profile"); }} />}
-            {page === "pricing" && <PricingPage onStart={() => { setPage("home"); setTab("profile"); }} />}
+            {page === "faq" && <FaqPage onStart={() => setPage("pricing")} />}
+            {page === "pricing" && (
+              <PricingPage plan={plan} setPlan={setPlan} profile={profile} setProfile={setProfile}
+                trainerCfg={trainerCfg} addBooking={addBooking} />
+            )}
           </>
         ) : (
           <>
             {tab === "profile" && (
-              <ProfileTab profile={profile} setProfile={setProfile} plan={plan} setPlan={setPlan}
-                trainerCfg={trainerCfg} progress={progress} setProgress={setProgress} addBooking={addBooking} />
+              <ProfileTab profile={profile} setProfile={setProfile} progress={progress} setProgress={setProgress}
+                session={session} onSignOut={() => setSession(null)} />
             )}
             {tab === "train" && (
               <WorkoutsTab trainerMode={trainerMode} videos={videos} addVideo={addVideo} removeVideo={removeVideo}
@@ -2101,15 +2187,7 @@ export default function App() {
                 <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>
                   {SEO_DESC}
                 </p>
-                <div className="mt-3 space-y-2">
-                  {FAQS.map((f) => (
-                    <details key={f.q} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-                      <summary style={{ ...fontBody, color: PAPER, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{f.q}</summary>
-                      <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 8, marginBottom: 0 }}>{f.a}</p>
-                    </details>
-                  ))}
-                </div>
-                <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 14 }}>
+                <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 10 }}>
                   PD Performance · Online personal training, optional Hyrox/CrossFit-style conditioning, custom workout splits & diet plans
                 </p>
               </footer>
@@ -2156,6 +2234,9 @@ export default function App() {
       )}
 
       {showTrainerPanel && <TrainerPanel trainerCfg={trainerCfg} setTrainerCfg={setTrainerCfg} onClose={() => setShowTrainerPanel(false)} bookings={bookings} />}
+
+      {/* login gate — shown until signed in */}
+      {loaded && !session && <LoginGate onLogin={(provider) => setSession({ provider, at: Date.now() })} />}
     </div>
   );
 }
