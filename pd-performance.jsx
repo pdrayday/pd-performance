@@ -1776,6 +1776,14 @@ export default function App() {
   const setTrainerCfg = (v) => { setTrainerCfgState(v); sset("pt:trainer-cfg", v, true); };
   const setTheme = (v) => { setThemeState(v); sset("pt:theme", v); };
 
+  /* declare color-scheme so browsers with forced/auto dark mode don't re-invert the light theme */
+  useEffect(() => {
+    try {
+      document.documentElement.style.colorScheme = theme === "light" ? "only light" : "dark";
+      document.body.style.background = theme === "light" ? "#F5F5F4" : "#0A0A0B";
+    } catch {}
+  }, [theme]);
+
   const addBooking = (b) => setBookings([b, ...bookings].slice(0, 50));
 
   /* SEO / GEO: document head metadata + structured data */
