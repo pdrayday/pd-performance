@@ -124,7 +124,7 @@ function localSplit(daysStr, minsStr, focus, goal) {
       ["Legs", hyrox ? "Hyrox/CrossFit-style circuit: 4 rounds of 0.7 mi run plus a station" : "Heavy lower: squat, press, extend"],
       ["Chest & Biceps", "Push plus arms"],
       ["Back & Triceps", "Pull plus arms"],
-      ["Light Legs & Shoulders", "Lighter loads, strict form, extra volume"],
+      ["Hyrox + Shoulders", "Two run+station rounds, then strict delt work"],
       ["Chest & Biceps", "Push plus arms, higher reps"],
       ["Back & Triceps", "Pull plus arms, higher reps"],
     ],
@@ -240,66 +240,67 @@ function localCoach(q, profile, dietPrefs) {
 /* ---------- static program data ---------- */
 const HYROX = [
   { run: "0.7 mi", station: "Sled push", detail: "2 lengths · eight 45 lb plates" },
-  { run: "0.7 mi", station: "Sled pull", detail: "2 lengths · take off three 45s (five plates)" },
-  { run: "0.7 mi", station: "Burpees", detail: "3.5 distances" },
   { run: "0.7 mi", station: "Lunges", detail: "70 lb EZ bar or two 35 lb dumbbells · 4 distances" },
 ];
 
 const SPLIT = [
-  { day: "Monday", focus: "Legs", tag: "HYROX / CROSSFIT", hyrox: true, exercises: [] },
+  {
+    day: "Monday", focus: "Legs", tag: "HYROX / CROSSFIT", hyrox: true,
+    exercises: [
+      { name: "Box jumps or standing long jumps", sets: 4, reps: "3–5", note: "do these first — explosive, land quiet, full recovery" },
+      { name: "Back squat or split squat", sets: 4, reps: "6–10", note: "after the circuit" },
+      { name: "Hamstring curl machine", sets: 3, reps: "10–12", note: "superset with calf machine" },
+      { name: "Calf machine", sets: 3, reps: "12–15", note: "superset with hamstring curls" },
+    ],
+  },
   {
     day: "Tuesday", focus: "Chest & Biceps", tag: "PUSH + ARMS",
     exercises: [
-      { name: "Incline dumbbell press", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Flat barbell bench press", sets: 4, reps: "6–10", note: "no superset" },
-      { name: "Cable fly", sets: 3, reps: "12–15", note: "slow negatives" },
-      { name: "Barbell curl", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Incline dumbbell curl", sets: 3, reps: "10–12", note: "full stretch at bottom" },
-      { name: "Hammer curl", sets: 3, reps: "10–12", note: "superset with incline curl optional" },
+      { name: "Incline dumbbell press", sets: 4, reps: "8–12", note: "first exercise — solo, no superset" },
+      { name: "Flat barbell bench press", sets: 4, reps: "6–10", note: "superset with barbell curl" },
+      { name: "Barbell curl", sets: 4, reps: "8–12", note: "superset with flat bench" },
+      { name: "Cable fly", sets: 3, reps: "12–15", note: "superset with hammer curl · slow negatives" },
+      { name: "Hammer curl", sets: 3, reps: "10–12", note: "superset with cable fly" },
     ],
   },
   {
     day: "Wednesday", focus: "Back & Triceps", tag: "PULL + ARMS",
     exercises: [
-      { name: "Lat pulldown", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Barbell row", sets: 4, reps: "6–10", note: "flat back, drive elbows" },
-      { name: "Seated cable row", sets: 3, reps: "10–12", note: "squeeze 1 sec at chest" },
-      { name: "Rope pushdown", sets: 4, reps: "10–15", note: "no superset" },
-      { name: "Overhead dumbbell extension", sets: 3, reps: "10–12", note: "elbows tight" },
-      { name: "Dips", sets: 3, reps: "8–12", note: "bodyweight or assisted" },
+      { name: "Lat pulldown", sets: 4, reps: "8–12", note: "first exercise — solo, no superset" },
+      { name: "Barbell row", sets: 4, reps: "6–10", note: "superset with rope pushdown · flat back" },
+      { name: "Rope pushdown", sets: 4, reps: "10–15", note: "superset with barbell row" },
+      { name: "Seated cable row", sets: 3, reps: "10–12", note: "superset with dips · squeeze 1 sec" },
+      { name: "Dips", sets: 3, reps: "8–12", note: "superset with cable row · bodyweight or assisted" },
     ],
   },
   {
-    day: "Thursday", focus: "Light Legs & Shoulders", tag: "VOLUME",
+    day: "Thursday", focus: "Hyrox + Shoulders", tag: "ENGINE + DELTS",
     exercises: [
-      { name: "Leg press (light)", sets: 3, reps: "12–15", note: "controlled tempo" },
-      { name: "Leg extension", sets: 3, reps: "15", note: "pause at top" },
-      { name: "Seated leg curl", sets: 3, reps: "12–15", note: "no superset" },
-      { name: "Seated dumbbell shoulder press", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Lateral raise", sets: 3, reps: "12–15", note: "light weight, strict form" },
-      { name: "Rear delt fly", sets: 3, reps: "12–15", note: "superset with laterals optional" },
+      { name: "Hyrox station 1", sets: 1, reps: "round", note: "0.7 mile run + sled push" },
+      { name: "Hyrox station 2", sets: 1, reps: "round", note: "0.7 mile run + 100 wall balls — break them up as needed" },
+      { name: "Military press", sets: 4, reps: "8–12", note: "strict, full lockout" },
+      { name: "Rear delt fly", sets: 4, reps: "8–12", note: "cables or fly machine" },
+      { name: "Lateral raise", sets: 4, reps: "8–12", note: "light weight, strict form" },
     ],
   },
   {
     day: "Friday", focus: "Chest & Biceps", tag: "PUSH + ARMS",
     exercises: [
-      { name: "Flat dumbbell press", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Incline barbell press", sets: 4, reps: "6–10", note: "no superset" },
-      { name: "Pec deck or dumbbell fly", sets: 3, reps: "12–15", note: "stretch focus" },
-      { name: "EZ bar curl", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Cable curl", sets: 3, reps: "12–15", note: "constant tension" },
-      { name: "Concentration curl", sets: 3, reps: "10–12", note: "each arm" },
+      { name: "Flat dumbbell press", sets: 4, reps: "8–12", note: "first exercise — solo, no superset" },
+      { name: "Incline barbell press", sets: 4, reps: "6–10", note: "superset with EZ bar curl" },
+      { name: "EZ bar curl", sets: 4, reps: "8–12", note: "superset with incline press" },
+      { name: "Pec deck or dumbbell fly", sets: 3, reps: "12–15", note: "superset with cable curl · stretch focus" },
+      { name: "Cable curl", sets: 3, reps: "12–15", note: "superset with pec deck · constant tension" },
     ],
   },
   {
     day: "Saturday", focus: "Back & Triceps", tag: "PULL + ARMS",
     exercises: [
-      { name: "Pull-ups", sets: 4, reps: "6–10", note: "weighted or assisted" },
-      { name: "T-bar or chest-supported row", sets: 4, reps: "8–12", note: "no superset" },
-      { name: "Straight-arm pulldown", sets: 3, reps: "12–15", note: "lats only" },
-      { name: "Close-grip bench press", sets: 4, reps: "8–10", note: "no superset" },
-      { name: "Skull crushers", sets: 3, reps: "10–12", note: "elbows in" },
-      { name: "Single-arm pushdown", sets: 3, reps: "12–15", note: "each arm" },
+      { name: "Pull-ups", sets: 4, reps: "6–10", note: "first exercise — solo · weighted or assisted" },
+      { name: "T-bar or chest-supported row", sets: 4, reps: "8–12", note: "superset with cable tricep extensions" },
+      { name: "Cable tricep extensions", sets: 4, reps: "8–10", note: "superset with T-bar row" },
+      { name: "Straight-arm pulldown", sets: 3, reps: "12–15", note: "superset with skull crushers · lats only" },
+      { name: "Skull crushers", sets: 3, reps: "10–12", note: "superset with straight-arm pulldown · elbows in" },
     ],
   },
   { day: "Sunday", focus: "Rest & Recovery", tag: "RECOVER", exercises: [] },
@@ -893,6 +894,10 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
           </button>
         </div>
 
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.55, marginTop: 8, borderLeft: `2px solid ${RED}`, paddingLeft: 10 }}>
+          If you'd like to replace a workout with a similar one that hits the same muscle — go ahead. These are guidelines to look, feel, and perform better. Intensity and consistency are what matter most.
+        </p>
+
         {showBuilder && (
           <div className="mt-4 space-y-3" style={{ background: SURFACE2, borderRadius: 12, padding: 14, border: `1px solid ${LINE}` }}>
             <div className="grid grid-cols-2 gap-3">
@@ -950,7 +955,10 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                 {open && (
                   <div style={{ padding: "0 14px 14px", background: SURFACE2 }}>
                     {d.hyrox && !customSplit ? (
-                      <HyroxCircuit />
+                      <>
+                        <HyroxCircuit />
+                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} />}
+                      </>
                     ) : d.exercises && d.exercises.length > 0 ? (
                       <ExerciseList exercises={d.exercises} />
                     ) : (
@@ -1016,6 +1024,28 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
               </div>
             );
           })}
+        </div>
+      </Card>
+
+      {/* cardio & abs — every week */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Cardio & Abs</Eyebrow>
+          <Flame size={16} color={RED} />
+        </div>
+        <div className="mt-3 space-y-2">
+          <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Warm-up cardio — every workout</div>
+            <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
+              1 mile chill run or 15 min on the stair stepper at the beginning of every session.
+            </div>
+          </div>
+          <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Abs — every day except leg days</div>
+            <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
+              Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each.
+            </div>
+          </div>
         </div>
       </Card>
     </div>
@@ -1156,9 +1186,37 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
 const LEADS = ["15 min", "30 min", "1 hour", "1 day", "1 week"];
 const LEAD_MS = { "15 min": 15 * 60e3, "30 min": 30 * 60e3, "1 hour": 60 * 60e3, "1 day": 24 * 3600e3, "1 week": 7 * 24 * 3600e3 };
 
-function AccountabilityTab({ commitments, setCommitments }) {
+const LOG_ITEMS = [["workout", "Workout"], ["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snack", "Snack"]];
+
+function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog, profile }) {
   const [text, setText] = useState("");
   const today = new Date().toISOString().slice(0, 10);
+  const todayLog = dailyLog[today] || {};
+
+  const setDay = (patch) => {
+    const next = { ...dailyLog, [today]: { ...todayLog, ...patch } };
+    /* keep photos for 14 days only — protects browser storage limits */
+    const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+    Object.keys(next).forEach((k) => { if (k < cutoff && next[k]?.photo) next[k] = { ...next[k], photo: null }; });
+    setDailyLog(next);
+  };
+
+  const sendWeek = async () => {
+    const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().slice(0, 10); }).reverse();
+    const lines = days.map((k) => {
+      const l = dailyLog[k];
+      if (!l) return `${k}: no log`;
+      const done = LOG_ITEMS.filter(([key]) => l[key] === true).map(([, lab]) => lab).join(", ");
+      const missed = LOG_ITEMS.filter(([key]) => l[key] === false).map(([, lab]) => lab).join(", ");
+      return `${k}: done — ${done || "none"}${missed ? ` · missed — ${missed}` : ""}${l.photo ? " · photo taken" : ""}`;
+    });
+    const txt = `PD Performance weekly log — ${profile?.name?.trim() || "Client"}\n${lines.join("\n")}`;
+    try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch {}
+    try { await navigator.clipboard.writeText(txt); alert("Your week is copied — paste it into a text to your coach, and attach your photos to the same message."); }
+    catch { alert(txt); }
+  };
+
+  const logDays = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().slice(0, 10); });
   const [notifStatus, setNotifStatus] = useState(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
 
   const add = () => {
@@ -1267,6 +1325,59 @@ function AccountabilityTab({ commitments, setCommitments }) {
 
   return (
     <div className="space-y-5">
+      {/* daily log — workout, meals, photo */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Daily log</Eyebrow>
+          <CheckSquare size={16} color={RED} />
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 6 }}>
+          Check off today — Yes if you did it on plan, No if you didn't. Send it to your coach every Sunday.
+        </p>
+        <div className="mt-3 space-y-2">
+          {LOG_ITEMS.map(([key, label]) => {
+            const v = todayLog[key];
+            return (
+              <div key={key} className="flex items-center justify-between" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 12px" }}>
+                <span style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{label}</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setDay({ [key]: true })} className="uppercase"
+                    style={{ ...fontDisplay, fontSize: 11, letterSpacing: "0.08em", padding: "4px 14px", borderRadius: 8, cursor: "pointer", background: v === true ? RED : "transparent", color: v === true ? PAPER : MUTED, border: `1px solid ${v === true ? RED : LINE}` }}>
+                    Yes
+                  </button>
+                  <button onClick={() => setDay({ [key]: false })} className="uppercase"
+                    style={{ ...fontDisplay, fontSize: 11, letterSpacing: "0.08em", padding: "4px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", color: v === false ? PAPER : MUTED, border: `1px solid ${v === false ? PAPER : LINE}` }}>
+                    No
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 mt-3">
+          <PhotoPick label={todayLog.photo ? "Photo ✓" : "Add today's photo"} onPick={(p) => setDay({ photo: p })} />
+          {todayLog.photo && <img src={todayLog.photo} alt="Today's check-in" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />}
+        </div>
+        <div className="mt-4" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
+          <div className="flex gap-1">
+            {[...logDays].reverse().map((k) => {
+              const l = dailyLog[k] || {};
+              const n = LOG_ITEMS.filter(([key]) => l[key] === true).length;
+              return (
+                <div key={k} style={{ flex: 1, textAlign: "center", background: SURFACE2, border: `1px solid ${n === 5 ? RED : LINE}`, borderRadius: 8, padding: "6px 2px" }}>
+                  <div style={{ ...fontMono, color: n > 0 ? PAPER : MUTED, fontSize: 11 }}>{n}/5</div>
+                  <div style={{ ...fontBody, color: MUTED, fontSize: 9 }}>{k.slice(5)}</div>
+                </div>
+              );
+            })}
+          </div>
+          <Btn onClick={sendWeek} style={{ width: "100%", justifyContent: "center", marginTop: 12 }}>Send my week to coach</Btn>
+          <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8 }}>
+            Packages your last 7 days into a message — text it to your coach with your photos attached.
+          </p>
+        </div>
+      </Card>
+
       <Card>
         <Eyebrow>Make a commitment</Eyebrow>
         <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
@@ -1647,7 +1758,7 @@ const PREVIEW_FRAMES = [
   {
     title: "Train smarter", icon: Dumbbell,
     cap: "Follow your coach's split — or build a custom one with AI in seconds.",
-    rows: ["MON · Legs — Hyrox/CrossFit circuit", "TUE · Chest & biceps", "WED · Back & triceps", "THU · Light legs & shoulders"],
+    rows: ["MON · Legs — Hyrox/CrossFit circuit", "TUE · Chest & biceps", "WED · Back & triceps", "THU · Hyrox stations + shoulders"],
   },
   {
     title: "Fuel it right", icon: Utensils,
@@ -1950,14 +2061,15 @@ export default function App() {
   const [showCoach, setShowCoach] = useState(false);
   const [theme, setThemeState] = useState("dark");
   const [session, setSessionState] = useState(null);
+  const [dailyLog, setDailyLogState] = useState({});
 
   useEffect(() => {
     (async () => {
-      const [p, pl, dp, dpl, cm, vd, cs, pg, ps, tc, bk, th, se] = await Promise.all([
+      const [p, pl, dp, dpl, cm, vd, cs, pg, ps, tc, bk, th, se, dl] = await Promise.all([
         sget("pt:profile"), sget("pt:plan"), sget("pt:diet-prefs"), sget("pt:diet-plan"),
         sget("pt:commitments"), sget("pt:videos", true), sget("pt:custom-split"),
         sget("pt:progress"), sget("pt:group-posts", true), sget("pt:trainer-cfg", true),
-        sget("pt:bookings", true), sget("pt:theme"), sget("pt:session"),
+        sget("pt:bookings", true), sget("pt:theme"), sget("pt:session"), sget("pt:daily-log"),
       ]);
       if (p) setProfileState(p);
       if (pl) setPlanState(pl);
@@ -1972,6 +2084,7 @@ export default function App() {
       if (bk) setBookingsState(bk);
       if (th) setThemeState(th);
       if (se) setSessionState(se);
+      if (dl) setDailyLogState(dl);
       setLoaded(true);
     })();
   }, []);
@@ -1989,6 +2102,7 @@ export default function App() {
   const setTrainerCfg = (v) => { setTrainerCfgState(v); sset("pt:trainer-cfg", v, true); };
   const setTheme = (v) => { setThemeState(v); sset("pt:theme", v); };
   const setSession = (v) => { setSessionState(v); sset("pt:session", v); };
+  const setDailyLog = (v) => { setDailyLogState(v); sset("pt:daily-log", v); };
 
   /* declare color-scheme so browsers with forced/auto dark mode don't re-invert the light theme */
   useEffect(() => {
@@ -2181,7 +2295,10 @@ export default function App() {
                 customSplit={customSplit} setCustomSplit={setCustomSplit} profile={profile} />
             )}
             {tab === "fuel" && <DietTab profile={profile} dietPrefs={dietPrefs} setDietPrefs={setDietPrefs} dietPlan={dietPlan} setDietPlan={setDietPlan} />}
-            {tab === "track" && <AccountabilityTab commitments={commitments} setCommitments={setCommitments} />}
+            {tab === "track" && (
+              <AccountabilityTab commitments={commitments} setCommitments={setCommitments}
+                dailyLog={dailyLog} setDailyLog={setDailyLog} profile={profile} />
+            )}
             {tab === "groups" && <GroupsTab profile={profile} posts={posts} setPosts={setPosts} />}
 
             {/* SEO / GEO footer — profile tab only */}
