@@ -65,6 +65,18 @@ const compressImage = (file, maxW = 600, quality = 0.65) =>
     reader.readAsDataURL(file);
   });
 
+/* ---------- faint body outlines shown inside empty photo slots ---------- */
+const BodyOutline = ({ view }) => (
+  <svg viewBox="0 0 100 220" preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.13, pointerEvents: "none" }}>
+    {view === "side" ? (
+      <path fill={PAPER} d="M54 6c7 0 12 5 12 13 0 5-2 9-5 11l-1 4c7 4 10 10 10 18l-1 28c0 10-3 20-4 30l-2 40c0 20 1 35 1 48h-9v-46l-1-22-1 22v46h-9c0-13 1-28 1-48l-2-40c-1-10-4-20-4-30l-1-28c0-8 3-14 10-18l-1-4c-3-2-5-6-5-11 0-8 5-13 12-13z" />
+    ) : (
+      <path fill={PAPER} d="M50 6c7 0 12 5 12 13 0 5-2 9-5 11v4c11 3 18 8 19 18l2 26c0 6-4 8-7 6l-3-22-1 28c0 6-2 12-2 20l-2 40c0 20 1 35 1 48h-8c0-13-1-28-2-46l-4-32-4 32c-1 18-2 33-2 46h-8c0-13 1-28 1-48l-2-40c0-8-2-14-2-20l-1-28-3 22c-3 2-7 0-7-6l2-26c1-10 8-15 19-18v-4c-3-2-5-6-5-11 0-8 5-13 12-13z" />
+    )}
+  </svg>
+);
+
 /* ---------- Claude API helpers (used when the host provides API access; otherwise the built-in engine below takes over) ---------- */
 async function askClaude(messages, maxTokens = 1000) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -345,7 +357,7 @@ const PLANS = [
     features: ["Everything in Gold", "Full recomposition roadmap", "Quarterly progress audits", "Best monthly rate"],
   },
 ];
-const ADDON = { name: "In-person training session", price: 50, note: "Available on every plan · one-on-one with your trainer each week" };
+const ADDON = { name: "In-person training session", price: 100, note: "Available on every plan · one-on-one with your trainer each week" };
 
 /* ---------- AI platform logos (tiny inline SVGs) ---------- */
 const GoogleLogo = ({ s = 14 }) => (
@@ -414,7 +426,7 @@ const FAQS = [
   },
   {
     q: "How much does online personal training with PD Performance cost?",
-    a: "Plans range from $250 to $300 per month depending on commitment: a one-time month at $300, month-to-month Basic at $285, the 3-month Gold plan at $275/month, and the 6-month Platinum plan at $250/month. Weekly one-on-one in-person training can be added to any plan for $50/month.",
+    a: "Plans range from $250 to $300 per month depending on commitment: a one-time month at $300, month-to-month Basic at $285, the 3-month Gold plan at $275/month, and the 6-month Platinum plan at $250/month. Weekly one-on-one in-person training can be added to any plan for $100/month.",
   },
   {
     q: "Do I get a custom workout and diet plan?",
@@ -499,7 +511,7 @@ function PhotoPick({ onPick, label = "Add photo", icon: Icon = Camera }) {
 }
 
 /* labeled photo upload slot (tap to add, shows thumbnail when filled) */
-function PhotoSlot({ label, photo, onPick, onClear }) {
+function PhotoSlot({ label, photo, onPick, onClear, outline }) {
   const ref = useRef(null);
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -526,10 +538,11 @@ function PhotoSlot({ label, photo, onPick, onClear }) {
         <button onClick={() => ref.current?.click()}
           style={{
             width: "100%", height: 130, borderRadius: 12, cursor: "pointer", padding: "0 4px",
-            background: SURFACE2, border: `2px dashed ${LINE}`,
+            background: SURFACE2, border: `2px dashed ${LINE}`, position: "relative", overflow: "hidden",
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
           }}>
-          <Camera size={18} color={RED} />
+          {outline && <BodyOutline view={outline} />}
+          <Camera size={18} color={RED} style={{ position: "relative" }} />
           <span style={{ ...fontDisplay, color: PAPER, fontSize: 10.5, letterSpacing: "0.12em", textAlign: "center" }} className="uppercase">Add {label}</span>
           <span style={{ ...fontBody, color: MUTED, fontSize: 10 }}>Tap to upload</span>
         </button>
@@ -634,13 +647,13 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
             Your photos — the AI uses these with your height and weight for the body comp check below
           </div>
           <div className="flex gap-2">
-            <PhotoSlot label="Front" photo={bmiPhotos.front}
+            <PhotoSlot label="Front" outline="front" photo={bmiPhotos.front}
               onPick={(p) => setBmiPhotos({ ...bmiPhotos, front: p })}
               onClear={() => setBmiPhotos({ ...bmiPhotos, front: null })} />
-            <PhotoSlot label="Back" photo={bmiPhotos.back}
+            <PhotoSlot label="Back" outline="back" photo={bmiPhotos.back}
               onPick={(p) => setBmiPhotos({ ...bmiPhotos, back: p })}
               onClear={() => setBmiPhotos({ ...bmiPhotos, back: null })} />
-            <PhotoSlot label="Side" photo={bmiPhotos.side}
+            <PhotoSlot label="Side" outline="side" photo={bmiPhotos.side}
               onPick={(p) => setBmiPhotos({ ...bmiPhotos, side: p })}
               onClear={() => setBmiPhotos({ ...bmiPhotos, side: null })} />
           </div>
