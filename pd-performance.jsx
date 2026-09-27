@@ -208,7 +208,7 @@ ${(prefs.allergies || []).length ? `Strictly excluded (allergies): ${prefs.aller
 }
 
 function localBmiInsight(bmi, cat, goal, picCount, h, w) {
-  const parts = [`Your BMI comes out to ${bmi.toFixed(1)} at ${h}" and ${w} lb — the ${cat.toLowerCase()}.`];
+  const parts = [`Your BMI comes out to ${bmi.toFixed(1)} at ${Math.floor(h / 12)}'${Math.round(h % 12)}\" and ${w} lb — the ${cat.toLowerCase()}.`];
   parts.push(
     cat === "Overweight" || cat === "Obese range"
       ? "Keep in mind BMI can't tell muscle from fat — people who train hard routinely read one category high, so treat it as a single data point rather than a verdict."
@@ -563,7 +563,19 @@ function ProfileTab({ profile, setProfile, progress, setProgress, session, onSig
   const [newWeight, setNewWeight] = useState("");
   const [newPhoto, setNewPhoto] = useState(null);
 
-  useEffect(() => setDraft(profile), [profile]);
+  useEffect(() => {
+    const t = parseFloat(profile.heightIn);
+    setDraft({
+      ...profile,
+      heightFt: profile.heightFt ?? (t ? String(Math.floor(t / 12)) : ""),
+      heightInch: profile.heightInch ?? (t ? String(Math.round(t % 12)) : ""),
+    });
+  }, [profile]);
+
+  const setHeight = (ft, inch) => {
+    const total = (parseFloat(ft) || 0) * 12 + (parseFloat(inch) || 0);
+    setDraft((d) => ({ ...d, heightFt: ft, heightInch: inch, heightIn: total ? String(total) : "" }));
+  };
 
   const save = () => {
     setProfile(draft);
@@ -584,7 +596,7 @@ function ProfileTab({ profile, setProfile, progress, setProgress, session, onSig
     const pics = [bmiPhotos.front, bmiPhotos.back, bmiPhotos.side].filter(Boolean);
     try {
       const prompt = `You are an encouraging but honest personal-training assistant doing a body-composition check-in.
-Client stats: height ${h} in, weight ${w} lb, BMI ${bmi.toFixed(1)} (${bmiCat}). Goal: ${draft.goal || "general fitness"}. Trains 6 days/week (push/pull split with an optional Hyrox/CrossFit-style conditioning day).
+Client stats: height ${Math.floor(h / 12)}'${Math.round(h % 12)}\", weight ${w} lb, BMI ${bmi.toFixed(1)} (${bmiCat}). Goal: ${draft.goal || "general fitness"}. Trains 6 days/week (push/pull split with an optional Hyrox/CrossFit-style conditioning day).
 ${pics.length > 0 ? `${pics.length} physique photo${pics.length > 1 ? "s are" : " is"} attached (from the front/back/side set). Use them to give a visual estimate of body-fat percentage range and where they carry muscle vs fat, and explain how that changes the BMI interpretation (muscular people often read 'overweight' on BMI).` : "No photos attached — interpret the BMI number alone and note its limits."}
 In 4-5 short sentences: give your assessment, then one concrete recommendation toward their goal. Plain language, no headers or bullet points. Note this is a visual estimate, not a medical measurement.`;
       const content = [...pics.map(dataUrlToImageBlock), { type: "text", text: prompt }];
@@ -623,8 +635,13 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
           <Field label="Age">
             <input style={inputStyle} value={draft.age} onChange={(e) => setDraft({ ...draft, age: e.target.value })} placeholder="28" inputMode="numeric" />
           </Field>
-          <Field label="Height (inches)">
-            <input style={inputStyle} value={draft.heightIn} onChange={(e) => setDraft({ ...draft, heightIn: e.target.value })} placeholder="70" inputMode="decimal" />
+          <Field label="Height">
+            <div className="flex gap-2">
+              <input style={inputStyle} value={draft.heightFt ?? ""} onChange={(e) => setHeight(e.target.value, draft.heightInch)}
+                placeholder="ft" inputMode="numeric" aria-label="Height, feet" />
+              <input style={inputStyle} value={draft.heightInch ?? ""} onChange={(e) => setHeight(draft.heightFt, e.target.value)}
+                placeholder="in" inputMode="numeric" aria-label="Height, inches" />
+            </div>
           </Field>
           <Field label="Weight (lb)">
             <input style={inputStyle} value={draft.weightLb} onChange={(e) => setDraft({ ...draft, weightLb: e.target.value })} placeholder="185" inputMode="decimal" />
@@ -706,7 +723,7 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
             <div style={{ ...fontMono, fontSize: 44, lineHeight: 1, color: PAPER }}>{bmi.toFixed(1)}</div>
             <div>
               <div style={{ ...fontDisplay, color: RED, fontSize: 14, letterSpacing: "0.1em" }} className="uppercase">BMI · {bmiCat}</div>
-              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{h}" · {w} lb{picCount > 0 ? ` · ${picCount} photo${picCount > 1 ? "s" : ""} attached` : ""}</div>
+              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{Math.floor(h / 12)}'{Math.round(h % 12)}" · {w} lb{picCount > 0 ? ` · ${picCount} photo${picCount > 1 ? "s" : ""} attached` : ""}</div>
             </div>
           </div>
         ) : (
@@ -1197,6 +1214,7 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
 /* TAB 4 — ACCOUNTABILITY (with reminders)                                */
 /* ====================================================================== */
 const LEADS = ["15 min", "30 min", "1 hour", "1 day", "1 week"];
+const fmt12 = (t) => { const [h, m] = (t || "18:00").split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
 const LEAD_MS = { "15 min": 15 * 60e3, "30 min": 30 * 60e3, "1 hour": 60 * 60e3, "1 day": 24 * 3600e3, "1 week": 7 * 24 * 3600e3 };
 
 const LOG_ITEMS = [["workout", "Workout"], ["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snack", "Snack"]];
@@ -1469,8 +1487,28 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
                         {LEADS.map((l) => <option key={l}>{l}</option>)}
                       </select>
                       <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>before</span>
-                      <input type="time" style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 12 }}
-                        value={r.dueTime} onChange={(e) => setReminder(c.id, { dueTime: e.target.value })} />
+                      {(() => {
+                        const [H, M] = (r.dueTime || "18:00").split(":").map(Number);
+                        const h12 = H % 12 || 12;
+                        const ap = H >= 12 ? "PM" : "AM";
+                        const selStyle = { ...inputStyle, width: "auto", padding: "7px 8px", fontSize: 12 };
+                        const setT = (hh, mm, a) => setReminder(c.id, { dueTime: `${String((hh % 12) + (a === "PM" ? 12 : 0)).padStart(2, "0")}:${String(mm).padStart(2, "0")}` });
+                        const mins = [0, 15, 30, 45].includes(M) ? [0, 15, 30, 45] : [M, 0, 15, 30, 45];
+                        return (
+                          <>
+                            <select style={selStyle} value={h12} onChange={(e) => setT(parseInt(e.target.value, 10), M, ap)}>
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                            <select style={selStyle} value={M} onChange={(e) => setT(h12, parseInt(e.target.value, 10), ap)}>
+                              {mins.map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")}</option>)}
+                            </select>
+                            <select style={selStyle} value={ap} onChange={(e) => setT(h12, M, e.target.value)}>
+                              <option>AM</option>
+                              <option>PM</option>
+                            </select>
+                          </>
+                        );
+                      })()}
                       {needsDate && (
                         <input type="date" style={{ ...inputStyle, width: "auto", padding: "7px 10px", fontSize: 12 }}
                           value={r.dueDate} onChange={(e) => setReminder(c.id, { dueDate: e.target.value })} />
@@ -1479,7 +1517,7 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
                     <p style={{ ...fontBody, color: MUTED, fontSize: 11 }}>
                       {needsDate
                         ? `You'll get a heads-up ${r.lead} before the deadline you set.`
-                        : `You'll get a nudge ${r.lead} before ${r.dueTime} each day it's unchecked.`}
+                        : `You'll get a nudge ${r.lead} before ${fmt12(r.dueTime)} each day it's unchecked.`}
                       {" "}Reminders fire while the app is open in your browser.
                     </p>
                   </div>
