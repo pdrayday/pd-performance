@@ -660,24 +660,55 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
           </Field>
         </div>
         <div className="mt-4">
-          <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginBottom: 6 }}>
-            Your photos — the AI uses these with your height and weight for the body comp check below
-          </div>
-          <div className="flex gap-2">
-            <PhotoSlot label="Front" outline="front" photo={bmiPhotos.front}
-              onPick={(p) => setBmiPhotos({ ...bmiPhotos, front: p })}
-              onClear={() => setBmiPhotos({ ...bmiPhotos, front: null })} />
-            <PhotoSlot label="Back" outline="back" photo={bmiPhotos.back}
-              onPick={(p) => setBmiPhotos({ ...bmiPhotos, back: p })}
-              onClear={() => setBmiPhotos({ ...bmiPhotos, back: null })} />
-            <PhotoSlot label="Side" outline="side" photo={bmiPhotos.side}
-              onPick={(p) => setBmiPhotos({ ...bmiPhotos, side: p })}
-              onClear={() => setBmiPhotos({ ...bmiPhotos, side: null })} />
-          </div>
-        </div>
-        <div className="mt-4">
           <Btn onClick={save}>{saved ? <Check size={14} /> : null}{saved ? "Saved" : "Save profile"}</Btn>
         </div>
+      </Card>
+
+      {/* photos + body comp */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Photos · Body comp</Eyebrow>
+          <Sparkles size={16} color={RED} />
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+          Add your front, back, and side photos — the AI reads them together with your height and weight. Same spot, same lighting each time.
+        </p>
+        <div className="flex gap-2 mt-3">
+          <PhotoSlot label="Front" outline="front" photo={bmiPhotos.front}
+            onPick={(p) => setBmiPhotos({ ...bmiPhotos, front: p })}
+            onClear={() => setBmiPhotos({ ...bmiPhotos, front: null })} />
+          <PhotoSlot label="Back" outline="back" photo={bmiPhotos.back}
+            onPick={(p) => setBmiPhotos({ ...bmiPhotos, back: p })}
+            onClear={() => setBmiPhotos({ ...bmiPhotos, back: null })} />
+          <PhotoSlot label="Side" outline="side" photo={bmiPhotos.side}
+            onPick={(p) => setBmiPhotos({ ...bmiPhotos, side: p })}
+            onClear={() => setBmiPhotos({ ...bmiPhotos, side: null })} />
+        </div>
+        {bmi ? (
+          <div className="mt-4 flex items-end gap-4">
+            <div style={{ ...fontMono, fontSize: 44, lineHeight: 1, color: PAPER }}>{bmi.toFixed(1)}</div>
+            <div>
+              <div style={{ ...fontDisplay, color: RED, fontSize: 14, letterSpacing: "0.1em" }} className="uppercase">BMI · {bmiCat}</div>
+              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{Math.floor(h / 12)}'{Math.round(h % 12)}" · {w} lb{picCount > 0 ? ` · ${picCount} photo${picCount > 1 ? "s" : ""} attached` : ""}</div>
+            </div>
+          </div>
+        ) : (
+          <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 12 }}>Enter your height and weight above to calculate BMI.</p>
+        )}
+        {bmi && (
+          <div className="mt-4 space-y-3">
+            <Btn onClick={aiBmi} disabled={bmiLoading} style={{ width: "100%", justifyContent: "center" }}>
+              {bmiLoading ? <RefreshCw size={14} className="animate-spin" /> : <PlatformLogo s={14} />}
+              {bmiLoading ? "Analyzing your photos…" : picCount > 0 ? "Analyze my photos with AI" : "Get AI insight (numbers only)"}
+            </Btn>
+            {bmiNote && (
+              <p style={{ ...fontBody, color: PAPER, fontSize: 13, lineHeight: 1.6, borderLeft: `2px solid ${RED}`, paddingLeft: 12 }}>{bmiNote}</p>
+            )}
+            <p style={{ ...fontBody, color: MUTED, fontSize: 11 }}>
+              Visual estimate only — not a medical measurement. Photos here aren't saved; use the weigh-in section below to keep progress photos.
+            </p>
+          </div>
+        )}
       </Card>
 
       {/* preferred AI platform */}
@@ -710,47 +741,6 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
             {getPlatform(draft.aiPlatform).name}
           </span>
         </div>
-      </Card>
-
-      {/* AI BMI + photo scan */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <Eyebrow>AI body comp check</Eyebrow>
-          <Sparkles size={16} color={RED} />
-        </div>
-        {bmi ? (
-          <div className="mt-4 flex items-end gap-4">
-            <div style={{ ...fontMono, fontSize: 44, lineHeight: 1, color: PAPER }}>{bmi.toFixed(1)}</div>
-            <div>
-              <div style={{ ...fontDisplay, color: RED, fontSize: 14, letterSpacing: "0.1em" }} className="uppercase">BMI · {bmiCat}</div>
-              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{Math.floor(h / 12)}'{Math.round(h % 12)}" · {w} lb{picCount > 0 ? ` · ${picCount} photo${picCount > 1 ? "s" : ""} attached` : ""}</div>
-            </div>
-          </div>
-        ) : (
-          <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 12 }}>Enter your height, weight, and pictures above to calculate BMI.</p>
-        )}
-
-        {bmi && (
-          <div className="mt-4 space-y-3">
-            <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.5 }}>
-              {picCount > 0
-                ? "Your photos are loaded — the AI will read body composition from them, not just the numbers."
-                : "Add your front, back, and side photos in the profile section above so the AI can analyze your actual physique, not just the numbers."}
-            </p>
-            <Btn onClick={aiBmi} disabled={bmiLoading} style={{ width: "100%", justifyContent: "center" }}>
-              {bmiLoading ? <RefreshCw size={14} className="animate-spin" /> : <PlatformLogo s={14} />}
-              {bmiLoading ? "Analyzing your photos…" : picCount > 0 ? "Analyze my photos with AI" : "Get AI insight (numbers only)"}
-            </Btn>
-            {bmiNote && (
-              <p style={{ ...fontBody, color: PAPER, fontSize: 13, lineHeight: 1.6, borderLeft: `2px solid ${RED}`, paddingLeft: 12 }}>
-                {bmiNote}
-              </p>
-            )}
-            <p style={{ ...fontBody, color: MUTED, fontSize: 11 }}>
-              Visual estimate only — not a medical measurement. Photos here aren't saved; use the weigh-in section below to keep progress photos.
-            </p>
-          </div>
-        )}
       </Card>
 
       {/* progress photos & weigh-ins */}
