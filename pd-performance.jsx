@@ -561,6 +561,33 @@ function PhotoSlot({ label, photo, onPick, onClear, outline }) {
   );
 }
 
+function AvatarPicker({ value, name, onPick }) {
+  const ref = useRef(null);
+  return (
+    <div className="flex items-center gap-4">
+      <input ref={ref} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (f) { try { onPick(await compressImage(f, 400, 0.7)); } catch { alert("Couldn't read that photo."); } }
+          e.target.value = "";
+        }} />
+      <button onClick={() => ref.current?.click()} aria-label="Set profile photo"
+        style={{ width: 74, height: 74, borderRadius: 99, overflow: "hidden", position: "relative", border: `2px solid ${LINE}`, background: SURFACE2, cursor: "pointer", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {value
+          ? <img src={value} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <span style={{ ...fontDisplay, color: RED, fontSize: 26 }}>{(name || "A")[0].toUpperCase()}</span>}
+        <span style={{ position: "absolute", bottom: 2, right: 2, background: RED, borderRadius: 99, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Camera size={12} color={PAPER} />
+        </span>
+      </button>
+      <div>
+        <div style={{ ...fontBody, color: PAPER, fontSize: 14, fontWeight: 600 }}>{name?.trim() || "Your profile"}</div>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>Tap the photo to change it</div>
+      </div>
+    </div>
+  );
+}
+
 /* ====================================================================== */
 /* TAB 1 — PROFILE                                                        */
 /* ====================================================================== */
@@ -638,6 +665,10 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
       {/* identity / stats */}
       <Card>
         <Eyebrow>Athlete profile</Eyebrow>
+        <div className="mt-4">
+          <AvatarPicker value={draft.avatar} name={draft.name}
+            onPick={(p) => { const nd = { ...draft, avatar: p }; setDraft(nd); setProfile(nd); }} />
+        </div>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <Field label="Name">
             <input style={inputStyle} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Your name" />
@@ -908,25 +939,73 @@ function ExerciseList({ exercises }) {
   return <div className="mt-3 space-y-2">{rows}</div>;
 }
 
-/* faint laurel wreath — a Greek accent for the Train tab */
-const Laurel = ({ size = 200, style }) => (
-  <svg viewBox="-60 -60 120 120" width={size} height={size} style={style} aria-hidden="true">
-    <g fill={PAPER}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <g key={`r${i}`} transform={`rotate(${30 + i * 15}) translate(0 -46)`}>
-          <ellipse rx="4.5" ry="11" transform="rotate(30)" />
-          <ellipse rx="3.8" ry="9.5" transform="rotate(-22) translate(3 2)" opacity="0.8" />
+/* thin-line animated wireframe figures — background art per tab */
+const LineArt = ({ kind, size = 200, style }) => {
+  const stroke = { fill: "none", stroke: PAPER, strokeWidth: 1.3, strokeLinecap: "round", strokeLinejoin: "round" };
+  const dot = (x, y, k) => <circle key={k} cx={x} cy={y} r="1.7" fill={PAPER} stroke="none" />;
+  if (kind === "meal") {
+    return (
+      <svg viewBox="0 0 130 110" width={size} height={size} style={style} aria-hidden="true">
+        <g {...stroke}>
+          <path d="M18 84 H112 M28 84 V104 M102 84 V104" />
+          <ellipse cx="78" cy="84" rx="15" ry="3.5" />
+          <path d="M98 72 L96 84 M106 72 L108 84 M98 72 H106" />
+          <circle cx="38" cy="36" r="7" />
+          <path d="M38 43 V74 M38 74 L52 76 L52 96 M30 74 V96" />
+          <g style={{ animation: "pdPoseA 2.8s ease-in-out infinite" }}>
+            <path d="M38 50 L56 62 L68 78 M68 78 L71 73" />
+          </g>
+          <g style={{ animation: "pdPoseB 2.8s ease-in-out infinite" }}>
+            <path d="M38 50 L54 53 L46 41 M46 41 L44 37" />
+          </g>
+          <g style={{ animation: "pdSteam 2.2s ease-out infinite" }}>
+            <path d="M72 74 q3 -6 0 -11 M84 74 q-3 -6 0 -11" />
+          </g>
         </g>
-      ))}
-      {Array.from({ length: 10 }).map((_, i) => (
-        <g key={`l${i}`} transform={`rotate(${-30 - i * 15}) translate(0 -46)`}>
-          <ellipse rx="4.5" ry="11" transform="rotate(-30)" />
-          <ellipse rx="3.8" ry="9.5" transform="rotate(22) translate(-3 2)" opacity="0.8" />
+        {dot(38, 50, "a")}{dot(38, 74, "b")}{dot(52, 76, "c")}
+      </svg>
+    );
+  }
+  if (kind === "run") {
+    return (
+      <svg viewBox="0 0 110 120" width={size} height={size} style={style} aria-hidden="true">
+        <g {...stroke}>
+          <circle cx="52" cy="20" r="7" />
+          <path d="M52 27 L48 58" />
+          <g style={{ animation: "pdPoseA 1.6s linear infinite" }}>
+            <path d="M51 34 L66 42 M51 34 L36 46 M48 58 L66 72 L70 94 M48 58 L34 76 L24 88" />
+          </g>
+          <g style={{ animation: "pdPoseB 1.6s linear infinite" }}>
+            <path d="M51 34 L38 40 M51 34 L64 48 M48 58 L58 80 L50 102 M48 58 L32 64 L22 74" />
+          </g>
+          <g style={{ animation: "pdSlide 1.4s linear infinite" }}>
+            <path d="M14 112 h12 M46 112 h12 M78 112 h12 M110 112 h12" />
+          </g>
         </g>
-      ))}
-    </g>
-  </svg>
-);
+        {dot(48, 58, "a")}{dot(51, 34, "b")}
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 100 130" width={size} height={size} style={style} aria-hidden="true">
+      <g {...stroke}>
+        <g style={{ animation: "pdPoseA 2.8s ease-in-out infinite" }}>
+          <circle cx="50" cy="14" r="7" />
+          <path d="M50 21 V60 M22 30 H78 M50 28 L30 30 M50 28 L70 30 M50 60 L43 92 L43 120 L36 120 M50 60 L57 92 L57 120 L64 120" />
+          <circle cx="20" cy="30" r="4" />
+          <circle cx="80" cy="30" r="4" />
+        </g>
+        <g style={{ animation: "pdPoseB 2.8s ease-in-out infinite" }}>
+          <circle cx="50" cy="44" r="7" />
+          <path d="M50 51 V78 M22 60 H78 M50 58 L30 60 M50 58 L70 60 M50 78 L28 92 L36 120 L29 120 M50 78 L72 92 L64 120 L71 120" />
+          <circle cx="20" cy="60" r="4" />
+          <circle cx="80" cy="60" r="4" />
+        </g>
+      </g>
+      {dot(50, 60, "a")}{dot(50, 78, "b")}
+    </svg>
+  );
+};
 
 /* ---------- client-side PDF export (brand header, letter size) ---------- */
 function pdfClean(t) {
@@ -1019,7 +1098,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
   return (
     <div className="space-y-5">
       <Card style={{ position: "relative", overflow: "hidden" }}>
-        <Laurel size={230} style={{ position: "absolute", top: -38, right: -48, opacity: 0.07, pointerEvents: "none" }} />
+        <LineArt kind="lift" size={215} style={{ position: "absolute", top: 4, right: -12, opacity: 0.12, pointerEvents: "none" }} />
         <div className="flex items-center justify-between" style={{ position: "relative" }}>
           <Eyebrow>{customSplit ? "Your custom split" : "Weekly split"}</Eyebrow>
           <button onClick={() => setShowBuilder(!showBuilder)}
@@ -1246,7 +1325,8 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
 
   return (
     <div className="space-y-5">
-      <Card>
+      <Card style={{ position: "relative", overflow: "hidden" }}>
+        <LineArt kind="meal" size={225} style={{ position: "absolute", top: 0, right: -24, opacity: 0.11, pointerEvents: "none" }} />
         <Eyebrow>Fuel preferences</Eyebrow>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <Field label="Diet goal">
@@ -1485,8 +1565,9 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
   return (
     <div className="space-y-5">
       {/* daily log — workout, meals, photo */}
-      <Card>
-        <div className="flex items-center justify-between">
+      <Card style={{ position: "relative", overflow: "hidden" }}>
+        <LineArt kind="run" size={195} style={{ position: "absolute", top: -4, right: -16, opacity: 0.11, pointerEvents: "none" }} />
+        <div className="flex items-center justify-between" style={{ position: "relative" }}>
           <Eyebrow>Daily log</Eyebrow>
           <CheckSquare size={16} color={RED} />
         </div>
@@ -2419,6 +2500,10 @@ export default function App() {
         * { box-sizing: border-box; }
         @keyframes pdfade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         @keyframes pdblink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+        @keyframes pdPoseA { 0%, 42% { opacity: 1; } 50%, 92% { opacity: 0; } 100% { opacity: 1; } }
+        @keyframes pdPoseB { 0%, 42% { opacity: 0; } 50%, 92% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes pdSteam { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-10px); opacity: 0; } }
+        @keyframes pdSlide { from { transform: translateX(0); } to { transform: translateX(-30px); } }
         /* phone-width header: icons only, smaller wordmark */
         @media (max-width: 520px) {
           .hdr-label { display: none !important; }
