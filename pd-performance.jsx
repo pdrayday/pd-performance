@@ -321,6 +321,15 @@ const SPLIT = [
 
 const PLANS = [
   {
+    id: "plus",
+    name: "PD Plus",
+    sub: "Self-guided premium",
+    price: 29,
+    per: "per month · cancel anytime",
+    monthly: 29,
+    features: ["AI-built custom splits & meal plans", "PDF exports & progress analytics", "Partner discounts — supplements & apparel", "Everything in Free"],
+  },
+  {
     id: "onetime",
     name: "One-Time",
     sub: "1 month of training & dieting",
@@ -419,7 +428,7 @@ const AI_PLATFORMS = [
 const getPlatform = (id) => AI_PLATFORMS.find((p) => p.id === id) || AI_PLATFORMS.find((p) => p.id === "chatgpt");
 
 /* ---------- SEO / GEO content (rendered in footer + JSON-LD) ---------- */
-const SEO_DESC = "PD Performance is an online personal training program: a customizable muscle-building split, an optional Hyrox/CrossFit-style conditioning day, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Plans from $250/month.";
+const SEO_DESC = "PD Performance is an online personal training program: a customizable muscle-building split, an optional Hyrox/CrossFit-style conditioning day, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Free to join — coaching plans from $250/month.";
 const FAQS = [
   {
     q: "What is PD Performance?",
@@ -427,7 +436,7 @@ const FAQS = [
   },
   {
     q: "How much does online personal training with PD Performance cost?",
-    a: "Plans range from $250 to $300 per month depending on commitment: a one-time month at $300, month-to-month Basic at $285, the 3-month Gold plan at $275/month, and the 6-month Platinum plan at $250/month. Weekly one-on-one in-person training can be added to any plan for $100/month.",
+    a: "Most of the app is free forever — the training log, community, weekly split, and progress tracking. PD Plus ($29/month) adds AI-built custom splits and meal plans, PDF exports, and partner discounts. Personal coaching runs $250 to $300 per month depending on commitment, and weekly one-on-one in-person training can be added to any coaching plan for $100/month.",
   },
   {
     q: "Do I get a custom workout and diet plan?",
@@ -2141,9 +2150,28 @@ function PricingPage({ plan, setPlan, profile, setProfile, trainerCfg, addBookin
       <Card>
         <Eyebrow>Membership · Pricing</Eyebrow>
         <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
-          Commit longer, pay less per month. Every plan includes the full app, custom programming, and diet planning. Tap a plan to select it.
+          Most of PD Performance is free — forever. You pay only for the personal side: custom programming, real coaching, and the accountability that gets results. Tap a plan to select it.
         </p>
-        <div className="space-y-3 mt-4">
+        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 14, marginTop: 14 }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">Free</div>
+              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>PD Athlete — free forever</div>
+            </div>
+            <div className="text-right">
+              <div style={{ ...fontMono, color: PAPER, fontSize: 22 }}>$0</div>
+            </div>
+          </div>
+          <ul className="mt-2 space-y-1">
+            {["The full app: daily log, streaks & tracking", "Community — posts, comments & support", "The proven weekly split & exercise library", "Weigh-ins, photos & body comp check"].map((f) => (
+              <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
+                <Check size={12} color={RED} /> {f}
+              </li>
+            ))}
+          </ul>
+          <div style={{ ...fontDisplay, color: MUTED, fontSize: 10, letterSpacing: "0.15em", marginTop: 8 }} className="uppercase">You're already on it</div>
+        </div>
+        <div className="space-y-3 mt-3">
           {PLANS.map((p) => {
             const active = plan?.id === p.id;
             return (
