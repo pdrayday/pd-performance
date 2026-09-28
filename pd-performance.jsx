@@ -3,8 +3,9 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon
+  Sun, Moon, Link2, Download
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 /* ---------- design tokens (CSS variables — themed dark/light) ---------- */
 const INK = "var(--ink)";
@@ -743,6 +744,28 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
         </div>
       </Card>
 
+      {/* integrations */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Integrations</Eyebrow>
+          <RefreshCw size={14} color={RED} />
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+          Sync your watch and training apps. Connections go live when accounts launch — tell your coach which ones you use.
+        </p>
+        <div className="mt-3 space-y-2">
+          {[["Strava", "Runs, rides & activities"], ["Garmin", "Watch workouts & heart rate"], ["Apple Health", "Steps, sleep & weight"], ["WHOOP", "Recovery & strain"], ["Oura", "Sleep & readiness"]].map(([n, d]) => (
+            <div key={n} className="flex items-center justify-between" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "9px 12px" }}>
+              <div>
+                <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{n}</div>
+                <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{d}</div>
+              </div>
+              <span style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.14em", color: MUTED, border: `1px solid ${LINE}`, borderRadius: 99, padding: "3px 10px" }} className="uppercase">Soon</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* progress photos & weigh-ins */}
       <Card>
         <div className="flex items-center justify-between">
@@ -800,17 +823,6 @@ In 4-5 short sentences: give your assessment, then one concrete recommendation t
         )}
       </Card>
 
-      {/* account */}
-      {session && (
-        <div className="flex items-center justify-between" style={{ padding: "2px 4px" }}>
-          <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
-            Signed in{session.provider !== "guest" ? ` with ${session.provider === "google" ? "Google" : "Apple"}` : " as guest"}
-          </span>
-          <button onClick={onSignOut} style={{ ...fontBody, background: "none", border: "none", color: MUTED, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
-            Sign out
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -844,22 +856,115 @@ function HyroxCircuit() {
   );
 }
 
-function ExerciseList({ exercises }) {
+function ExerciseRow({ ex, inSuperset }) {
   return (
-    <div className="mt-3 space-y-2">
-      {exercises.map((ex, i) => (
-        <div key={i} className="flex items-center justify-between" style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-          <div>
-            <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
-            <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{ex.note}</div>
-          </div>
-          <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap", marginLeft: 10 }}>
-            {ex.sets} × {ex.reps}
-          </div>
-        </div>
-      ))}
+    <div className="flex items-center justify-between"
+      style={{ background: inSuperset ? "transparent" : SURFACE, border: inSuperset ? "none" : `1px solid ${LINE}`, borderRadius: inSuperset ? 0 : 10, padding: "10px 12px" }}>
+      <div>
+        <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{ex.note}</div>
+      </div>
+      <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap", marginLeft: 10 }}>
+        {ex.sets} × {ex.reps}
+      </div>
     </div>
   );
+}
+
+function ExerciseList({ exercises }) {
+  const isSS = (x) => (x?.note || "").toLowerCase().includes("superset");
+  const rows = [];
+  for (let i = 0; i < exercises.length; i++) {
+    const a = exercises[i], b = exercises[i + 1];
+    if (isSS(a) && isSS(b)) {
+      rows.push(
+        <div key={i} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderLeft: `3px solid ${RED}`, borderRadius: 10, overflow: "hidden" }}>
+          <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, padding: "7px 12px 0" }}>
+            <Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
+          </div>
+          <ExerciseRow ex={a} inSuperset />
+          <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
+            <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
+            <Link2 size={12} color={RED} />
+            <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
+          </div>
+          <ExerciseRow ex={b} inSuperset />
+        </div>
+      );
+      i++;
+    } else {
+      rows.push(<ExerciseRow key={i} ex={a} />);
+    }
+  }
+  return <div className="mt-3 space-y-2">{rows}</div>;
+}
+
+/* faint laurel wreath — a Greek accent for the Train tab */
+const Laurel = ({ size = 200, style }) => (
+  <svg viewBox="-60 -60 120 120" width={size} height={size} style={style} aria-hidden="true">
+    <g fill={PAPER}>
+      {Array.from({ length: 10 }).map((_, i) => (
+        <g key={`r${i}`} transform={`rotate(${30 + i * 15}) translate(0 -46)`}>
+          <ellipse rx="4.5" ry="11" transform="rotate(30)" />
+          <ellipse rx="3.8" ry="9.5" transform="rotate(-22) translate(3 2)" opacity="0.8" />
+        </g>
+      ))}
+      {Array.from({ length: 10 }).map((_, i) => (
+        <g key={`l${i}`} transform={`rotate(${-30 - i * 15}) translate(0 -46)`}>
+          <ellipse rx="4.5" ry="11" transform="rotate(-30)" />
+          <ellipse rx="3.8" ry="9.5" transform="rotate(22) translate(-3 2)" opacity="0.8" />
+        </g>
+      ))}
+    </g>
+  </svg>
+);
+
+/* ---------- client-side PDF export (brand header, letter size) ---------- */
+function pdfClean(t) {
+  return String(t).replace(/\u2192/g, "->").replace(/[^\x20-\x7E\u00B7\u00D7\u2013\u2014\u2018\u2019\u201C\u201D]/g, "");
+}
+function pdfDoc(title) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  doc.setFillColor(10, 10, 11); doc.rect(0, 0, 612, 70, "F");
+  doc.setTextColor(245, 245, 242); doc.setFont("helvetica", "bold"); doc.setFontSize(17);
+  doc.text("pd / PERFORMANCE", 48, 42);
+  doc.setDrawColor(217, 4, 41); doc.setLineWidth(2.5); doc.line(48, 51, 190, 51);
+  doc.setTextColor(10, 10, 11); doc.setFontSize(15); doc.text(pdfClean(title), 48, 102);
+  return { doc, y: 130 };
+}
+function pdfLine(st, txt, opts = {}) {
+  if (st.y > 730) { st.doc.addPage(); st.y = 60; }
+  st.doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+  st.doc.setFontSize(opts.size || 10);
+  if (opts.red) st.doc.setTextColor(217, 4, 41); else st.doc.setTextColor(35, 35, 38);
+  const lines = st.doc.splitTextToSize(pdfClean(txt), 516);
+  st.doc.text(lines, 48, st.y);
+  st.y += lines.length * (opts.size || 10) * 1.4 + (opts.gap ?? 4);
+}
+function downloadSplitPdf(activeSplit, isCustom) {
+  const st = pdfDoc("Weekly Training Split");
+  activeSplit.forEach((d) => {
+    pdfLine(st, `${d.day.toUpperCase()} — ${d.focus}`, { bold: true, size: 12, red: true, gap: 3 });
+    if (d.hyrox && !isCustom) HYROX.forEach((h) => pdfLine(st, `Run ${h.run} -> ${h.station} — ${h.detail}`));
+    if (d.exercises && d.exercises.length) d.exercises.forEach((ex) => pdfLine(st, `${ex.name} — ${ex.sets} x ${ex.reps}${ex.note ? `   (${ex.note})` : ""}`));
+    if ((!d.exercises || !d.exercises.length) && !d.hyrox) pdfLine(st, d.tag || (d.day === "Sunday" ? "Full rest — walk, stretch, hydrate." : `${d.focus} session.`));
+    st.y += 8;
+  });
+  pdfLine(st, "CARDIO & ABS", { bold: true, size: 12, red: true, gap: 3 });
+  pdfLine(st, "Warm-up cardio every workout: 1 mile chill run or 15 min on the stair stepper.");
+  pdfLine(st, "Abs every day except leg days (Monday & Thursday): pick 2-3 core moves, 3 sets each.");
+  st.doc.save("pd-workout-plan.pdf");
+}
+function downloadDietPdf(dietPlan, prefs, profile) {
+  const st = pdfDoc("Weekly Meal Plan");
+  pdfLine(st, `Goal: ${prefs.dietGoal}   ·   Meals per day: ${prefs.mealsPerDay}${profile?.weightLb ? `   ·   Weight: ${profile.weightLb} lb` : ""}`, { bold: true, gap: 12 });
+  dietPlan.split("\n").forEach((ln) => {
+    const t = ln.trim();
+    if (!t) { st.y += 6; return; }
+    if (/^[A-Z][A-Z \/&'\u2019-]{3,}$/.test(t)) pdfLine(st, t, { bold: true, red: true, size: 11.5, gap: 3 });
+    else pdfLine(st, t);
+  });
+  st.doc.save("pd-meal-plan.pdf");
 }
 
 function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile }) {
@@ -904,8 +1009,9 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
 
   return (
     <div className="space-y-5">
-      <Card>
-        <div className="flex items-center justify-between">
+      <Card style={{ position: "relative", overflow: "hidden" }}>
+        <Laurel size={230} style={{ position: "absolute", top: -38, right: -48, opacity: 0.07, pointerEvents: "none" }} />
+        <div className="flex items-center justify-between" style={{ position: "relative" }}>
           <Eyebrow>{customSplit ? "Your custom split" : "Weekly split"}</Eyebrow>
           <button onClick={() => setShowBuilder(!showBuilder)}
             style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.15em", background: "none", border: "none", cursor: "pointer" }}
@@ -1045,6 +1151,10 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
             );
           })}
         </div>
+
+        <Btn variant="ghost" onClick={() => downloadSplitPdf(activeSplit, !!customSplit)} style={{ width: "100%", justifyContent: "center", marginTop: 14 }}>
+          <Download size={14} /> Download my split (PDF)
+        </Btn>
       </Card>
 
       {/* cardio & abs — every week */}
@@ -1188,9 +1298,28 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
       {dietPlan && (
         <Card>
           <Eyebrow>Your weekly plan</Eyebrow>
-          <pre style={{ color: PAPER, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", marginTop: 12, fontFamily: "'Inter', sans-serif" }}>
-            {dietPlan}
-          </pre>
+          <div className="mt-3">
+            {dietPlan.split("\n").map((ln, i) => {
+              const t = ln.trim();
+              if (!t) return <div key={i} style={{ height: 10 }} />;
+              if (/^[A-Z][A-Z \/&'\u2019-]{3,}$/.test(t)) return (
+                <div key={i} style={{ ...fontDisplay, color: RED, fontSize: 12, letterSpacing: "0.16em", marginTop: 16, marginBottom: 8 }} className="uppercase">{t}</div>
+              );
+              if (/^meal \d/i.test(t)) {
+                const ci = t.indexOf(":");
+                return (
+                  <div key={i} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+                    <span style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 600 }}>{ci > 0 ? t.slice(0, ci + 1) : ""} </span>
+                    <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6 }}>{ci > 0 ? t.slice(ci + 1) : t}</span>
+                  </div>
+                );
+              }
+              return <p key={i} style={{ ...fontBody, color: PAPER, fontSize: 13, lineHeight: 1.75, margin: "0 0 10px" }}>{t}</p>;
+            })}
+          </div>
+          <Btn variant="ghost" onClick={() => downloadDietPdf(dietPlan, prefs, profile)} style={{ width: "100%", justifyContent: "center", marginTop: 8 }}>
+            <Download size={14} /> Download my meal plan (PDF)
+          </Btn>
           <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 12, borderTop: `1px solid ${LINE}`, paddingTop: 10 }}>
             General guidance — always double-check labels for your allergens.
           </p>
@@ -1548,6 +1677,15 @@ function GroupsTab({ profile, posts, setPosts }) {
   };
 
   const like = (id) => setPosts(posts.map((p) => (p.id === id ? { ...p, likes: (p.likes || 0) + 1 } : p)));
+  const [drafts, setDrafts] = useState({});
+  const comment = (id) => {
+    const t = (drafts[id] || "").trim();
+    if (!t) return;
+    setPosts(posts.map((p) => p.id === id
+      ? { ...p, comments: [...(p.comments || []), { id: Date.now().toString(), author: profile.name?.trim() || "Anonymous", text: t }].slice(-20) }
+      : p));
+    setDrafts({ ...drafts, [id]: "" });
+  };
 
   const ago = (iso) => {
     const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -1561,7 +1699,7 @@ function GroupsTab({ profile, posts, setPosts }) {
   return (
     <div className="space-y-5">
       <Card>
-        <Eyebrow>Post to the group</Eyebrow>
+        <Eyebrow>Post to the community</Eyebrow>
         <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 6 }}>
           Visible to everyone in the program — goals, progress, meals, workout clips.
         </p>
@@ -1627,11 +1765,23 @@ function GroupsTab({ profile, posts, setPosts }) {
               {p.text && <p style={{ ...fontBody, color: PAPER, fontSize: 14, lineHeight: 1.55, marginTop: 10, whiteSpace: "pre-wrap" }}>{p.text}</p>}
             </div>
             {p.photo && <img src={p.photo} alt={`${p.tag} post by ${p.author}`} style={{ width: "100%", display: "block", maxHeight: 360, objectFit: "cover" }} />}
-            <div className="flex items-center gap-2" style={{ padding: "10px 16px", borderTop: `1px solid ${LINE}` }}>
+            <div style={{ padding: "10px 16px", borderTop: `1px solid ${LINE}` }}>
               <button onClick={() => like(p.id)} className="flex items-center gap-1"
                 style={{ background: "none", border: "none", cursor: "pointer", ...fontMono, color: p.likes > 0 ? RED : MUTED, fontSize: 13 }}>
                 <Heart size={15} fill={p.likes > 0 ? RED : "none"} color={p.likes > 0 ? RED : MUTED} /> {p.likes || 0}
               </button>
+              {(p.comments || []).map((cm) => (
+                <div key={cm.id} style={{ ...fontBody, fontSize: 12.5, marginTop: 8, lineHeight: 1.5 }}>
+                  <span style={{ color: PAPER, fontWeight: 600 }}>{cm.author}</span>{" "}
+                  <span style={{ color: MUTED }}>{cm.text}</span>
+                </div>
+              ))}
+              <div className="flex gap-2 mt-2">
+                <input style={{ ...inputStyle, padding: "7px 10px", fontSize: 12 }} placeholder="Add a comment…"
+                  value={drafts[p.id] || ""} onChange={(e) => setDrafts({ ...drafts, [p.id]: e.target.value })}
+                  onKeyDown={(e) => e.key === "Enter" && comment(p.id)} />
+                <Btn variant="ghost" onClick={() => comment(p.id)} style={{ padding: "7px 12px" }}>Post</Btn>
+              </div>
             </div>
           </Card>
         ))
@@ -1835,7 +1985,7 @@ function LoginGate({ onLogin }) {
     <div className="fixed inset-0 overflow-y-auto" style={{ background: INK, zIndex: 80 }}>
       <div className="mx-auto px-5 py-8 flex flex-col" style={{ maxWidth: 420, minHeight: "100%" }}>
         <div className="flex items-baseline gap-2 justify-center">
-          <span style={{ ...fontDisplay, color: PAPER, fontSize: 24, fontWeight: 700, textTransform: "lowercase" }}>pd</span>
+          <span style={{ fontFamily: "'Great Vibes', cursive", color: PAPER, fontSize: 34, lineHeight: 1 }}>pd</span>
           <span style={{ color: RED, fontWeight: 700, fontSize: 22, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
           <span style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 500, letterSpacing: "0.18em" }}>PERFORMANCE</span>
         </div>
@@ -2100,6 +2250,7 @@ export default function App() {
   const [trainerMode, setTrainerMode] = useState(false);
   const [showTrainerPanel, setShowTrainerPanel] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [theme, setThemeState] = useState("dark");
   const [session, setSessionState] = useState(null);
   const [dailyLog, setDailyLogState] = useState({});
@@ -2215,17 +2366,17 @@ export default function App() {
   };
 
   const tabs = [
-    { id: "profile", label: "Profile", icon: User },
+    { id: "groups", label: "Community", icon: Users },
     { id: "train", label: "Train", icon: Dumbbell },
     { id: "fuel", label: "Fuel", icon: Utensils },
     { id: "track", label: "Track", icon: CheckSquare },
-    { id: "groups", label: "Groups", icon: Users },
+    { id: "profile", label: "Profile", icon: User },
   ];
 
   return (
     <div className={theme === "light" ? "pd-light" : "pd-dark"} style={{ background: INK, minHeight: "100vh", ...fontBody }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Great+Vibes&display=swap');
         /* dark palette — light is its exact RGB inversion (red accent stays) */
         .pd-dark {
           --ink:#0A0A0B; --surface:#141416; --surface2:#1B1B1E; --line:#26262B;
@@ -2243,7 +2394,7 @@ export default function App() {
         /* phone-width header: icons only, smaller wordmark */
         @media (max-width: 520px) {
           .hdr-label { display: none !important; }
-          .brand-a { font-size: 17px !important; }
+          .brand-a { font-size: 23px !important; }
           .brand-slash { font-size: 15px !important; }
           .brand-b { font-size: 14px !important; letter-spacing: 0.12em !important; }
         }
@@ -2258,7 +2409,7 @@ export default function App() {
       <header className="sticky top-0" style={{ background: "var(--ink-glass)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${LINE}`, zIndex: 50 }}>
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <h1 className="flex items-baseline gap-2" style={{ margin: 0 }} aria-label="PD Performance — online personal training">
-          <span className="brand-a" style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 700, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
+          <span className="brand-a" style={{ fontFamily: "'Great Vibes', cursive", color: PAPER, fontSize: 30, lineHeight: 1, fontWeight: 400 }}>pd</span>
           <span className="brand-slash" style={{ color: RED, fontWeight: 700, fontSize: 20, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
           <span className="brand-b" style={{ ...fontDisplay, color: PAPER, fontSize: 20, fontWeight: 500, letterSpacing: "0.18em" }}>PERFORMANCE</span>
         </h1>
@@ -2292,6 +2443,14 @@ export default function App() {
               Trainer
             </span>
           </button>
+          {session && (
+            <button onClick={() => setShowAccount((v) => !v)} aria-label="Account menu" title={profile.name || "Account"}
+              style={{ width: 30, height: 30, borderRadius: 99, overflow: "hidden", border: `1px solid ${showAccount ? RED : LINE}`, background: SURFACE2, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {profile.avatar
+                ? <img src={profile.avatar} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <span style={{ ...fontDisplay, color: RED, fontSize: 13 }}>{(profile.name || "A")[0].toUpperCase()}</span>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -2309,6 +2468,23 @@ export default function App() {
         ))}
       </nav>
       </header>
+
+      {/* account menu */}
+      {showAccount && session && (
+        <div style={{ position: "fixed", top: 60, right: 14, zIndex: 90, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 14, width: 235 }}>
+          <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{profile.name?.trim() || "Athlete"}</div>
+          <div style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: 10 }}>
+            Signed in{session.provider !== "guest" ? ` with ${session.provider === "google" ? "Google" : "Apple"}` : " as guest"}
+          </div>
+          <div className="space-y-2">
+            <PhotoPick label={profile.avatar ? "Change photo" : "Set profile photo"} icon={ImagePlus}
+              onPick={(p) => { setProfile({ ...profile, avatar: p }); }} />
+            <Btn variant="ghost" onClick={() => { setSession(null); setShowAccount(false); }} style={{ width: "100%", justifyContent: "center" }}>
+              Sign out
+            </Btn>
+          </div>
+        </div>
+      )}
 
       {/* content */}
       <main className="px-4 pt-5 mx-auto" style={{ maxWidth: 640, paddingBottom: 96 }}>
