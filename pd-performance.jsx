@@ -1005,7 +1005,7 @@ function downloadDietPdf(dietPlan, prefs, profile) {
   st.doc.save("pd-meal-plan.pdf");
 }
 
-function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile }) {
+function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap }) {
   const [openDay, setOpenDay] = useState("Monday");
   const [vTitle, setVTitle] = useState("");
   const [vUrl, setVUrl] = useState("");
@@ -1224,10 +1224,34 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
   );
 }
 
+function SnapCard({ title, type, snaps, addSnap }) {
+  const mine = (snaps || []).filter((x) => x.type === type).slice(0, 6);
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <Eyebrow>{title}</Eyebrow>
+        <PhotoPick label="Add photo" icon={ImagePlus} onPick={(p) => addSnap(type, p)} />
+      </div>
+      {mine.length > 0 ? (
+        <div className="flex gap-2 mt-3 flex-wrap">
+          {mine.map((x) => (
+            <div key={x.id} style={{ textAlign: "center" }}>
+              <img src={x.photo} alt={type} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, border: `1px solid ${LINE}` }} />
+              <div style={{ ...fontBody, color: MUTED, fontSize: 9, marginTop: 2 }}>{x.date.slice(5)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8 }}>Snap it — your coach looks for consistency, not perfection.</p>
+      )}
+    </Card>
+  );
+}
+
 /* ====================================================================== */
 /* TAB 3 — DIET                                                           */
 /* ====================================================================== */
-function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan }) {
+function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snaps, addSnap }) {
   const [prefs, setPrefs] = useState(dietPrefs);
   const [loading, setLoading] = useState(false);
   const [allergyInput, setAllergyInput] = useState("");
@@ -1278,8 +1302,9 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
   };
 
   return (
-    <div className="space-y-5">
-      <Card style={{ position: "relative", overflow: "hidden" }}>
+    <div className="fuel-cols">
+      <div className="space-y-5">
+      <Card>
         <Eyebrow>Fuel preferences</Eyebrow>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <Field label="Diet goal">
@@ -1342,7 +1367,11 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
         </div>
       </Card>
 
-      {dietPlan && (
+      <SnapCard title="Meal snaps" type="meal" snaps={snaps} addSnap={addSnap} />
+      </div>
+
+      <div className="space-y-5">
+      {dietPlan ? (
         <Card>
           <Eyebrow>Your weekly plan</Eyebrow>
           <div className="mt-3">
@@ -1371,7 +1400,15 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
             General guidance — always double-check labels for your allergens.
           </p>
         </Card>
+      ) : (
+        <Card>
+          <Eyebrow>Your weekly plan</Eyebrow>
+          <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 12, lineHeight: 1.6 }}>
+            Your full meal plan lays out here — every meal, calories, and macros. Set your preferences on the left and hit “Build my plan.”
+          </p>
+        </Card>
       )}
+      </div>
     </div>
   );
 }
@@ -2556,6 +2593,8 @@ export default function App() {
         @keyframes pdSlide { from { transform: translateX(0); } to { transform: translateX(-30px); } }
         @keyframes pdBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
         /* phone-width header: icons only, smaller wordmark */
+        .fuel-cols { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+        @media (min-width: 900px) { .fuel-cols { grid-template-columns: 5fr 6fr; } }
         @media (max-width: 520px) {
           .hdr-label { display: none !important; }
           .brand-a { font-size: 19px !important; }
@@ -2651,7 +2690,7 @@ export default function App() {
       )}
 
       {/* content */}
-      <main className="px-4 pt-5 mx-auto" style={{ maxWidth: 640, paddingBottom: 96 }}>
+      <main className="px-4 pt-5 mx-auto" style={{ maxWidth: page === "home" && tab === "fuel" ? 980 : 640, paddingBottom: 96 }}>
         {!loaded ? (
           <div className="flex items-center gap-2 justify-center pt-16" style={{ ...fontMono, color: MUTED, fontSize: 13 }}>
             <RefreshCw size={14} className="animate-spin" /> loading…
