@@ -532,6 +532,44 @@ function PhotoPick({ onPick, label = "Add photo", icon: Icon = Camera }) {
   );
 }
 
+/* tiny camera button — photo or short video, for per-exercise form checks */
+function TinySnap({ onSave }) {
+  const ref = useRef(null);
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*,video/*" style={{ display: "none" }}
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) { return; }
+          try {
+            if (f.type.startsWith("video/")) {
+              if (f.size > 1500000) {
+                alert("That video is too big to store in the app — text it to your coach for the form check.");
+              } else {
+                const r = new FileReader();
+                r.onload = () => onSave(r.result, true);
+                r.readAsDataURL(f);
+              }
+            } else {
+              onSave(await compressImage(f, 500, 0.65), false);
+            }
+          } catch { alert("Couldn't read that file."); }
+          e.target.value = "";
+        }} />
+      <button onClick={() => ref.current?.click()} title="Upload a photo or short video for a form check" aria-label="Upload a form-check photo or video"
+        style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 7, width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}>
+        <Camera size={13} color={RED} />
+      </button>
+    </>
+  );
+}
+
+const SnapThumb = ({ x, size = 26 }) => x.video ? (
+  <video src={x.photo} muted playsInline style={{ width: size, height: size, objectFit: "cover", borderRadius: 6, border: `1px solid ${LINE}` }} />
+) : (
+  <img src={x.photo} alt={x.label || "snap"} style={{ width: size, height: size, objectFit: "cover", borderRadius: 6, border: `1px solid ${LINE}` }} />
+);
+
 /* labeled photo upload slot (tap to add, shows thumbnail when filled) */
 function PhotoSlot({ label, photo, onPick, onClear, outline }) {
   const ref = useRef(null);
@@ -588,8 +626,8 @@ function AvatarPicker({ value, name, onPick }) {
         {value
           ? <img src={value} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <span style={{ ...fontDisplay, color: RED, fontSize: 26 }}>{(name || "A")[0].toUpperCase()}</span>}
-        <span style={{ position: "absolute", bottom: 2, right: 2, background: RED, borderRadius: 99, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Camera size={12} color={PAPER} />
+        <span style={{ position: "absolute", bottom: 0, right: 0, background: RED, borderRadius: 99, width: 27, height: 27, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${SURFACE}` }}>
+          <Camera size={15} color="#fff" />
         </span>
       </button>
       <div>
@@ -984,22 +1022,32 @@ function HyroxCircuit() {
   );
 }
 
-function ExerciseRow({ ex, inSuperset }) {
+function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel }) {
+  const label = `${dayLabel} · ${ex.name}`;
+  const mine = (snaps || []).filter((x) => x.type === "workout" && x.label === label).slice(0, 3);
   return (
     <div className="flex items-center justify-between"
       style={{ background: inSuperset ? "transparent" : SURFACE, border: inSuperset ? "none" : `1px solid ${LINE}`, borderRadius: inSuperset ? 0 : 10, padding: "10px 12px" }}>
       <div>
         <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
         <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{ex.note}</div>
+        {mine.length > 0 && (
+          <div className="flex gap-1 mt-1">
+            {mine.map((x) => <SnapThumb key={x.id} x={x} />)}
+          </div>
+        )}
       </div>
-      <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap", marginLeft: 10 }}>
-        {ex.sets} × {ex.reps}
+      <div className="flex items-center gap-2" style={{ marginLeft: 10 }}>
+        <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap" }}>
+          {ex.sets} × {ex.reps}
+        </div>
+        <TinySnap onSave={(data, vid) => addSnap("workout", data, label, vid)} />
       </div>
     </div>
   );
 }
 
-function ExerciseList({ exercises }) {
+function ExerciseList({ exercises, snaps, addSnap, dayLabel }) {
   const isSS = (x) => (x?.note || "").toLowerCase().includes("superset");
   const rows = [];
   for (let i = 0; i < exercises.length; i++) {
@@ -1010,18 +1058,18 @@ function ExerciseList({ exercises }) {
           <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, padding: "7px 12px 0" }}>
             <Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
           </div>
-          <ExerciseRow ex={a} inSuperset />
+          <ExerciseRow ex={a} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} />
           <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
             <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
             <Link2 size={12} color={RED} />
             <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
           </div>
-          <ExerciseRow ex={b} inSuperset />
+          <ExerciseRow ex={b} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} />
         </div>
       );
       i++;
     } else {
-      rows.push(<ExerciseRow key={i} ex={a} />);
+      rows.push(<ExerciseRow key={i} ex={a} snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} />);
     }
   }
   return <div className="mt-3 space-y-2">{rows}</div>;
@@ -1033,22 +1081,27 @@ function pdfClean(t) {
   return String(t).replace(/\u2192/g, "->").replace(/[^\x20-\x7E\u00B7\u00D7\u2013\u2014\u2018\u2019\u201C\u201D]/g, "");
 }
 const PDF_INK = [10, 10, 11], PDF_PAPER = [245, 245, 242], PDF_MUTED = [169, 169, 178], PDF_RED = [217, 4, 41], PDF_HAIR = [45, 45, 50];
-function pdfDecorate(doc) {
-  doc.setFillColor(PDF_INK[0], PDF_INK[1], PDF_INK[2]); doc.rect(0, 0, 612, 792, "F");
-  doc.setDrawColor(PDF_HAIR[0], PDF_HAIR[1], PDF_HAIR[2]); doc.setLineWidth(0.7); doc.line(54, 748, 558, 748);
-  try { doc.addImage("data:image/png;base64," + PD_LOGO_B64, "PNG", 54, 756, 90, 19); } catch (e) {}
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(PDF_MUTED[0], PDF_MUTED[1], PDF_MUTED[2]);
+const PD_LOGO_DARK_B64 = "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3OwnbE6l+bWIovCJPXse/7mJickXT0xseQcgD5VS+FLKyeVk1FobxrF9IEniR8Nw6Z9nZ/d9IkmSp2KSUm43xlyR9XukBJaWmldYG5crDTBCOORORERE62FVQlGrjR9y0EGHamvjzDH0KIp+tG/fngvDsNm1rqVS7o5abewMpdwTgSQ2xtwbRVEQReEDSTKc7Scdx5nyvLFjXVc9Qwh1qBDJfBg272g2m3fEsVnXntdRUXTIncknERERrYdVPZ+eVzsNSDITz1Z5JbvH2vjJtGuMiZ40JroKwFXrEOe6iON4dnFx/pbFRdwy7FiIiIiINqNVSabneS/Lm++ZJAniOL4jjuOUEks0CtjrSURERIN2QPIppRCe552b9yBrbWhMeGWvheCJiIiIaHM6IPlUytsqxPJOP+mSJAmjKErb85U2EPZ6EhER0Xo6IPl0XfcoIDko6wHtmpb74zjmVlEjjLU9iYiIaBg6ks/aOYCo5z3ImOi2OO59C0wiIiIi2pyeSj6FEMJ1vWfmFWO31tooir7Wz/qcVA0cciciIqL19lTy6TjumJTOsctF47tZTkyNMbf2PzTqFw65ExER0bA8lXwqpXZKKU7Ke4C1diGOzYP9DYuIiIiINqKVyeeRUsrDsqonJQkQx9H3jYkeG0h0tO5Y25OIiIiG6ank0/O8k4XI3NgIQAJjoquttc0+x0VEREREG5AEAMdxlFLuWdk14wVayWd8J5Bkb4FEI429nkRERNQv7eRTjTuOc372YiMgSWDjOP4R9zUaTVxoRERERMO23PO5VUrn+LzdMuM4vi+Oox8NJDIiIiIi2nAUALhu7QQpJeI4vXRnkiQwJroxjuO5gUVH66pzOL1bTyiH3ImIiKiflJRCuK57bt5QuhACcRzfa62NBhMa9VuRZJSIiIhoPUkhpHQc9xVJzhoiaxMYY+5M8i6kkcVeTyIiIuo36Thq3HXdM/Lne5pHjInuHFBcRERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERt/x/hi3G8aNM23wAAAABJRU5ErkJggg==";
+const pdfPal = (light) => light
+  ? { bg: [255, 255, 255], text: [28, 28, 30], muted: [112, 112, 118], hair: [222, 222, 224], logo: PD_LOGO_DARK_B64 }
+  : { bg: PDF_INK, text: PDF_PAPER, muted: PDF_MUTED, hair: PDF_HAIR, logo: PD_LOGO_B64 };
+function pdfDecorate(doc, pal) {
+  doc.setFillColor(pal.bg[0], pal.bg[1], pal.bg[2]); doc.rect(0, 0, 612, 792, "F");
+  doc.setDrawColor(pal.hair[0], pal.hair[1], pal.hair[2]); doc.setLineWidth(0.7); doc.line(54, 748, 558, 748);
+  try { doc.addImage("data:image/png;base64," + pal.logo, "PNG", 54, 756, 90, 19); } catch (e) {}
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(pal.muted[0], pal.muted[1], pal.muted[2]);
   doc.text(String(doc.getNumberOfPages()), 558, 769, { align: "right" });
 }
-function pdfDoc(title, subtitle) {
+function pdfDoc(title, subtitle, light) {
+  const pal = pdfPal(light);
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  pdfDecorate(doc);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(PDF_PAPER[0], PDF_PAPER[1], PDF_PAPER[2]);
+  pdfDecorate(doc, pal);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(pal.text[0], pal.text[1], pal.text[2]);
   doc.text(pdfClean(title).toUpperCase(), 54, 76);
   doc.setFillColor(PDF_RED[0], PDF_RED[1], PDF_RED[2]); doc.rect(54, 86, 108, 3, "F");
-  const st = { doc, y: 112 };
+  const st = { doc, y: 112, pal };
   if (subtitle) {
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(PDF_MUTED[0], PDF_MUTED[1], PDF_MUTED[2]);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(pal.muted[0], pal.muted[1], pal.muted[2]);
     const ls = doc.splitTextToSize(pdfClean(subtitle), 504);
     doc.text(ls, 54, st.y);
     st.y += ls.length * 13 + 10;
@@ -1056,21 +1109,21 @@ function pdfDoc(title, subtitle) {
   return st;
 }
 function pdfLine(st, txt, o = {}) {
-  if (st.y > 722) { st.doc.addPage(); pdfDecorate(st.doc); st.y = 64; }
+  if (st.y > 722) { st.doc.addPage(); pdfDecorate(st.doc, st.pal); st.y = 64; }
   const doc = st.doc;
   doc.setFont("helvetica", o.bold ? "bold" : "normal");
   doc.setFontSize(o.size || 10);
   if (o.red) doc.setTextColor(PDF_RED[0], PDF_RED[1], PDF_RED[2]);
-  else if (o.muted) doc.setTextColor(PDF_MUTED[0], PDF_MUTED[1], PDF_MUTED[2]);
-  else doc.setTextColor(PDF_PAPER[0], PDF_PAPER[1], PDF_PAPER[2]);
+  else if (o.muted) doc.setTextColor(st.pal.muted[0], st.pal.muted[1], st.pal.muted[2]);
+  else doc.setTextColor(st.pal.text[0], st.pal.text[1], st.pal.text[2]);
   const lines = doc.splitTextToSize(pdfClean(txt), o.indent ? 480 : 504);
   doc.text(lines, o.indent ? 76 : 54, st.y);
   if (o.bullet) { doc.setFillColor(PDF_RED[0], PDF_RED[1], PDF_RED[2]); doc.circle(66, st.y - 3, 1.8, "F"); }
   st.y += lines.length * (o.size || 10) * 1.45 + (o.gap ?? 5);
 }
-function downloadSplitPdf(activeSplit, isCustom) {
+function downloadSplitPdf(activeSplit, isCustom, light, preview) {
   const st = pdfDoc("Weekly Training Split",
-    "pd / performance · Swap any exercise for a similar one that hits the same muscle — these are guidelines to look, feel, and perform better. Intensity and consistency matter most.");
+    "pd / performance · Swap any exercise for a similar one that hits the same muscle — these are guidelines to look, feel, and perform better. Intensity and consistency matter most.", light);
   activeSplit.forEach((d) => {
     pdfLine(st, `${d.day.toUpperCase()} — ${d.focus.toUpperCase()}`, { red: true, bold: true, size: 12, gap: 4 });
     if (d.hyrox && !isCustom) {
@@ -1090,11 +1143,12 @@ function downloadSplitPdf(activeSplit, isCustom) {
   pdfLine(st, "CARDIO & ABS", { red: true, bold: true, size: 12, gap: 4 });
   pdfLine(st, "Warm-up cardio, every workout — 1 mile chill run or 15 min on the stair stepper.", { indent: true, bullet: true });
   pdfLine(st, "Abs every day except leg days (Monday & Thursday) — pick 2–3 core moves, 3 sets each.", { indent: true, bullet: true });
-  st.doc.save("pd-workout-plan.pdf");
+  if (preview) window.open(st.doc.output("bloburl"), "_blank");
+  else st.doc.save("pd-workout-plan.pdf");
 }
-function downloadDietPdf(dietPlan, prefs, profile) {
+function downloadDietPdf(dietPlan, prefs, profile, light, preview) {
   const st = pdfDoc("Weekly Meal Plan",
-    `pd / performance · Goal: ${prefs.dietGoal} · ${prefs.mealsPerDay} meals per day${profile?.weightLb ? ` · ${profile.weightLb} lb` : ""}`);
+    `pd / performance · Goal: ${prefs.dietGoal} · ${prefs.mealsPerDay} meals per day${profile?.weightLb ? ` · ${profile.weightLb} lb` : ""}`, light);
   dietPlan.split("\n").forEach((ln) => {
     const t = ln.trim();
     if (!t) { st.y += 5; return; }
@@ -1102,11 +1156,13 @@ function downloadDietPdf(dietPlan, prefs, profile) {
     else if (/^meal \d/i.test(t)) pdfLine(st, t, { indent: true, bullet: true, gap: 3 });
     else pdfLine(st, t, { gap: 4 });
   });
-  st.doc.save("pd-meal-plan.pdf");
+  if (preview) window.open(st.doc.output("bloburl"), "_blank");
+  else st.doc.save("pd-meal-plan.pdf");
 }
 
 function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap }) {
-  const [openDay, setOpenDay] = useState("Monday");
+  const [openDay, setOpenDay] = useState(null);
+  const [splitPdfLight, setSplitPdfLight] = useState(true);
   const [vTitle, setVTitle] = useState("");
   const [vUrl, setVUrl] = useState("");
   const [showBuilder, setShowBuilder] = useState(false);
@@ -1223,10 +1279,10 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                     {d.hyrox && !customSplit ? (
                       <>
                         <HyroxCircuit />
-                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} />}
+                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} />}
                       </>
                     ) : d.exercises && d.exercises.length > 0 ? (
-                      <ExerciseList exercises={d.exercises} />
+                      <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} />
                     ) : (
                       <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>
                         {customSplit ? d.tag : d.day === "Sunday" ? "Full rest. Walk, stretch, sleep, hydrate — recovery is where the growth happens." : `${d.focus} session.`}
@@ -1302,9 +1358,26 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
           })}
         </div>
 
-        <Btn variant="ghost" onClick={() => downloadSplitPdf(activeSplit, !!customSplit)} style={{ width: "100%", justifyContent: "center", marginTop: 14 }}>
-          <Download size={14} /> Download my split (PDF)
-        </Btn>
+        <div className="mt-4 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
+          <Btn onClick={() => downloadSplitPdf(activeSplit, !!customSplit, splitPdfLight, false)}>
+            <Download size={14} /> Download PDF
+          </Btn>
+          <Btn variant="ghost" onClick={() => downloadSplitPdf(activeSplit, !!customSplit, splitPdfLight, true)}>
+            Preview
+          </Btn>
+          <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
+            {["White", "Dark"].map((m) => {
+              const on = (m === "White") === splitPdfLight;
+              return (
+                <button key={m} onClick={() => setSplitPdfLight(m === "White")} className="uppercase"
+                  style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.1em", padding: "7px 12px", border: "none", cursor: "pointer", background: on ? RED : "transparent", color: on ? "#fff" : MUTED }}>
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+          <span style={{ ...fontBody, color: MUTED, fontSize: 10.5 }}>White = printer-friendly</span>
+        </div>
       </Card>
 
       {/* cardio & abs — every week */}
@@ -1381,6 +1454,7 @@ function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snap
   };
 
   const fasting = prefs.mealsPerDay === "0";
+  const [dietPdfLight, setDietPdfLight] = useState(true);
   const PlatformLogo = getPlatform(profile.aiPlatform).Logo;
 
   const generate = async () => {
@@ -1498,10 +1572,10 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
                     <span style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 600 }}>{ci > 0 ? t.slice(0, ci + 1) : ""} </span>
                     <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6 }}>{ci > 0 ? t.slice(ci + 1) : t}</span>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <PhotoPick label="Snap" onPick={(p) => addSnap("meal", p, mealKey)} />
+                      <TinySnap onSave={(data, vid) => addSnap("meal", data, mealKey, vid)} />
                       {mealSnaps.map((x) => (
                         <div key={x.id} style={{ textAlign: "center" }}>
-                          <img src={x.photo} alt="meal snap" style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 7, border: `1px solid ${LINE}` }} />
+                          <SnapThumb x={x} size={36} />
                           <div style={{ ...fontBody, color: MUTED, fontSize: 8, marginTop: 1 }}>{x.date.slice(5)}</div>
                         </div>
                       ))}
@@ -1512,9 +1586,25 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
               return <p key={i} style={{ ...fontBody, color: PAPER, fontSize: 13, lineHeight: 1.75, margin: "0 0 10px" }}>{t}</p>;
             })}
           </div>
-          <Btn variant="ghost" onClick={() => downloadDietPdf(dietPlan, prefs, profile)} style={{ width: "100%", justifyContent: "center", marginTop: 8 }}>
-            <Download size={14} /> Download my meal plan (PDF)
-          </Btn>
+          <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
+            <Btn onClick={() => downloadDietPdf(dietPlan, prefs, profile, dietPdfLight, false)}>
+              <Download size={14} /> Download PDF
+            </Btn>
+            <Btn variant="ghost" onClick={() => downloadDietPdf(dietPlan, prefs, profile, dietPdfLight, true)}>
+              Preview
+            </Btn>
+            <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
+              {["White", "Dark"].map((m) => {
+                const on = (m === "White") === dietPdfLight;
+                return (
+                  <button key={m} onClick={() => setDietPdfLight(m === "White")} className="uppercase"
+                    style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.1em", padding: "7px 12px", border: "none", cursor: "pointer", background: on ? RED : "transparent", color: on ? "#fff" : MUTED }}>
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 12, borderTop: `1px solid ${LINE}`, paddingTop: 10 }}>
             General guidance — always double-check labels for your allergens.
           </p>
@@ -1541,7 +1631,7 @@ const LEAD_MS = { "15 min": 15 * 60e3, "30 min": 30 * 60e3, "1 hour": 60 * 60e3,
 
 function PhotoHistoryCard({ snaps, dailyLog, progress }) {
   const items = [
-    ...(snaps || []).map((x) => ({ id: "s" + x.id, date: x.date, photo: x.photo, label: `${x.type === "meal" ? "Meal" : "Workout"}${x.label ? ` · ${x.label}` : ""}` })),
+    ...(snaps || []).map((x) => ({ id: "s" + x.id, date: x.date, photo: x.photo, video: x.video, label: `${x.type === "meal" ? "Meal" : "Workout"}${x.label ? ` · ${x.label}` : ""}` })),
     ...Object.entries(dailyLog || {}).filter(([, v]) => v && v.photo).map(([d, v]) => ({ id: "d" + d, date: d, photo: v.photo, label: "Daily check-in" })),
     ...(progress || []).filter((p) => p.photo).map((p) => ({ id: "p" + p.id, date: p.date, photo: p.photo, label: `Weigh-in · ${p.weight} lb` })),
   ].sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -1565,7 +1655,11 @@ function PhotoHistoryCard({ snaps, dailyLog, progress }) {
             <div className="mt-2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
               {arr.map((it) => (
                 <div key={it.id}>
-                  <img src={it.photo} alt={it.label} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />
+                  {it.video ? (
+                    <video src={it.photo} muted playsInline controls style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />
+                  ) : (
+                    <img src={it.photo} alt={it.label} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />
+                  )}
                   <div style={{ ...fontBody, color: MUTED, fontSize: 8.5, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.date.slice(5)} · {it.label}</div>
                 </div>
               ))}
@@ -2075,7 +2169,7 @@ function CoachTab({ profile, dietPrefs, plan }) {
   const [loading, setLoading] = useState(false);
   const endRef = useRef(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [msgs, loading]);
+  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), [msgs, loading]);
 
   const send = async () => {
     const q = input.trim();
@@ -2598,7 +2692,18 @@ export default function App() {
   const setDailyLog = (v) => { setDailyLogState(v); sset("pt:daily-log", v); };
   const setSnaps = (v) => { setSnapsState(v); sset("pt:snaps", v); };
   const setInterests = (v) => { setInterestsState(v); sset("pt:interests", v); };
-  const addSnap = (type, photo, label) => setSnaps([{ id: Date.now().toString(), date: new Date().toISOString().slice(0, 10), type, photo, label: label || "" }, ...snaps].slice(0, 30));
+  const addSnap = (type, photo, label, video) => {
+    const next = [{ id: Date.now().toString(), date: new Date().toISOString().slice(0, 10), type, photo, label: label || "", video: !!video }, ...snaps];
+    const vids = next.filter((x) => x.video);
+    const drop = new Set(vids.slice(3).map((x) => x.id));
+    setSnaps(next.filter((x) => !drop.has(x.id)).slice(0, 30));
+  };
+
+  /* lock page scroll while the coach overlay is open */
+  useEffect(() => {
+    document.body.style.overflow = showCoach ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [showCoach]);
 
   /* declare color-scheme so browsers with forced/auto dark mode don't re-invert the light theme */
   useEffect(() => {
