@@ -1032,44 +1032,75 @@ const PD_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAp8AAACgCAYAAABKWwdZAAA2p0lEQVR4nO3
 function pdfClean(t) {
   return String(t).replace(/\u2192/g, "->").replace(/[^\x20-\x7E\u00B7\u00D7\u2013\u2014\u2018\u2019\u201C\u201D]/g, "");
 }
-function pdfDoc(title) {
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
-  doc.setFillColor(10, 10, 11); doc.rect(0, 0, 612, 70, "F");
-  try { doc.addImage("data:image/png;base64," + PD_LOGO_B64, "PNG", 48, 19, 152, 32); } catch (e) {}
-  doc.setTextColor(10, 10, 11); doc.setFontSize(15); doc.text(pdfClean(title), 48, 102);
-  return { doc, y: 130 };
+const PDF_INK = [10, 10, 11], PDF_PAPER = [245, 245, 242], PDF_MUTED = [169, 169, 178], PDF_RED = [217, 4, 41], PDF_HAIR = [45, 45, 50];
+function pdfDecorate(doc) {
+  doc.setFillColor(PDF_INK[0], PDF_INK[1], PDF_INK[2]); doc.rect(0, 0, 612, 792, "F");
+  doc.setDrawColor(PDF_HAIR[0], PDF_HAIR[1], PDF_HAIR[2]); doc.setLineWidth(0.7); doc.line(54, 748, 558, 748);
+  try { doc.addImage("data:image/png;base64," + PD_LOGO_B64, "PNG", 54, 756, 90, 19); } catch (e) {}
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(PDF_MUTED[0], PDF_MUTED[1], PDF_MUTED[2]);
+  doc.text(String(doc.getNumberOfPages()), 558, 769, { align: "right" });
 }
-function pdfLine(st, txt, opts = {}) {
-  if (st.y > 730) { st.doc.addPage(); st.y = 60; }
-  st.doc.setFont("helvetica", opts.bold ? "bold" : "normal");
-  st.doc.setFontSize(opts.size || 10);
-  if (opts.red) st.doc.setTextColor(217, 4, 41); else st.doc.setTextColor(35, 35, 38);
-  const lines = st.doc.splitTextToSize(pdfClean(txt), 516);
-  st.doc.text(lines, 48, st.y);
-  st.y += lines.length * (opts.size || 10) * 1.4 + (opts.gap ?? 4);
+function pdfDoc(title, subtitle) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  pdfDecorate(doc);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(PDF_PAPER[0], PDF_PAPER[1], PDF_PAPER[2]);
+  doc.text(pdfClean(title).toUpperCase(), 54, 76);
+  doc.setFillColor(PDF_RED[0], PDF_RED[1], PDF_RED[2]); doc.rect(54, 86, 108, 3, "F");
+  const st = { doc, y: 112 };
+  if (subtitle) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(PDF_MUTED[0], PDF_MUTED[1], PDF_MUTED[2]);
+    const ls = doc.splitTextToSize(pdfClean(subtitle), 504);
+    doc.text(ls, 54, st.y);
+    st.y += ls.length * 13 + 10;
+  }
+  return st;
+}
+function pdfLine(st, txt, o = {}) {
+  if (st.y > 722) { st.doc.addPage(); pdfDecorate(st.doc); st.y = 64; }
+  const doc = st.doc;
+  doc.setFont("helvetica", o.bold ? "bold" : "normal");
+  doc.setFontSize(o.size || 10);
+  if (o.red) doc.setTextColor(PDF_RED[0], PDF_RED[1], PDF_RED[2]);
+  else if (o.muted) doc.setTextColor(PDF_MUTED[0], PDF_MUTED[1], PDF_MUTED[2]);
+  else doc.setTextColor(PDF_PAPER[0], PDF_PAPER[1], PDF_PAPER[2]);
+  const lines = doc.splitTextToSize(pdfClean(txt), o.indent ? 480 : 504);
+  doc.text(lines, o.indent ? 76 : 54, st.y);
+  if (o.bullet) { doc.setFillColor(PDF_RED[0], PDF_RED[1], PDF_RED[2]); doc.circle(66, st.y - 3, 1.8, "F"); }
+  st.y += lines.length * (o.size || 10) * 1.45 + (o.gap ?? 5);
 }
 function downloadSplitPdf(activeSplit, isCustom) {
-  const st = pdfDoc("Weekly Training Split");
+  const st = pdfDoc("Weekly Training Split",
+    "pd / performance · Swap any exercise for a similar one that hits the same muscle — these are guidelines to look, feel, and perform better. Intensity and consistency matter most.");
   activeSplit.forEach((d) => {
-    pdfLine(st, `${d.day.toUpperCase()} — ${d.focus}`, { bold: true, size: 12, red: true, gap: 3 });
-    if (d.hyrox && !isCustom) HYROX.forEach((h) => pdfLine(st, `Run ${h.run} -> ${h.station} — ${h.detail}`));
-    if (d.exercises && d.exercises.length) d.exercises.forEach((ex) => pdfLine(st, `${ex.name} — ${ex.sets} x ${ex.reps}${ex.note ? `   (${ex.note})` : ""}`));
-    if ((!d.exercises || !d.exercises.length) && !d.hyrox) pdfLine(st, d.tag || (d.day === "Sunday" ? "Full rest — walk, stretch, hydrate." : `${d.focus} session.`));
+    pdfLine(st, `${d.day.toUpperCase()} — ${d.focus.toUpperCase()}`, { red: true, bold: true, size: 12, gap: 4 });
+    if (d.hyrox && !isCustom) {
+      HYROX.forEach((h) => pdfLine(st, `Run ${h.run} -> ${h.station} · ${h.detail}`, { indent: true, bullet: true, gap: 3 }));
+    }
+    if (d.exercises && d.exercises.length) {
+      d.exercises.forEach((ex) => {
+        pdfLine(st, `${ex.name} — ${ex.sets} × ${ex.reps}`, { indent: true, bullet: true, gap: 0.5 });
+        if (ex.note) pdfLine(st, ex.note, { indent: true, muted: true, size: 8.5, gap: 4 });
+      });
+    }
+    if ((!d.exercises || !d.exercises.length) && !d.hyrox) {
+      pdfLine(st, d.tag || (d.day === "Sunday" ? "Full rest — walk, stretch, sleep, hydrate. Recovery is where the growth happens." : `${d.focus} session.`), { indent: true, muted: true });
+    }
     st.y += 8;
   });
-  pdfLine(st, "CARDIO & ABS", { bold: true, size: 12, red: true, gap: 3 });
-  pdfLine(st, "Warm-up cardio every workout: 1 mile chill run or 15 min on the stair stepper.");
-  pdfLine(st, "Abs every day except leg days (Monday & Thursday): pick 2-3 core moves, 3 sets each.");
+  pdfLine(st, "CARDIO & ABS", { red: true, bold: true, size: 12, gap: 4 });
+  pdfLine(st, "Warm-up cardio, every workout — 1 mile chill run or 15 min on the stair stepper.", { indent: true, bullet: true });
+  pdfLine(st, "Abs every day except leg days (Monday & Thursday) — pick 2–3 core moves, 3 sets each.", { indent: true, bullet: true });
   st.doc.save("pd-workout-plan.pdf");
 }
 function downloadDietPdf(dietPlan, prefs, profile) {
-  const st = pdfDoc("Weekly Meal Plan");
-  pdfLine(st, `Goal: ${prefs.dietGoal}   ·   Meals per day: ${prefs.mealsPerDay}${profile?.weightLb ? `   ·   Weight: ${profile.weightLb} lb` : ""}`, { bold: true, gap: 12 });
+  const st = pdfDoc("Weekly Meal Plan",
+    `pd / performance · Goal: ${prefs.dietGoal} · ${prefs.mealsPerDay} meals per day${profile?.weightLb ? ` · ${profile.weightLb} lb` : ""}`);
   dietPlan.split("\n").forEach((ln) => {
     const t = ln.trim();
-    if (!t) { st.y += 6; return; }
-    if (/^[A-Z][A-Z \/&'\u2019-]{3,}$/.test(t)) pdfLine(st, t, { bold: true, red: true, size: 11.5, gap: 3 });
-    else pdfLine(st, t);
+    if (!t) { st.y += 5; return; }
+    if (/^[A-Z][A-Z \/&'\u2019-]{3,}$/.test(t)) { st.y += 4; pdfLine(st, t, { red: true, bold: true, size: 12, gap: 4 }); }
+    else if (/^meal \d/i.test(t)) pdfLine(st, t, { indent: true, bullet: true, gap: 3 });
+    else pdfLine(st, t, { gap: 4 });
   });
   st.doc.save("pd-meal-plan.pdf");
 }
@@ -1232,6 +1263,16 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                       </div>
                     )}
 
+                    <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px dashed ${LINE}`, paddingTop: 10 }}>
+                      <PhotoPick label="Snap this workout" onPick={(p) => addSnap("workout", p, `${d.day} — ${d.focus}`)} />
+                      {(snaps || []).filter((x) => x.type === "workout" && x.label === `${d.day} — ${d.focus}`).slice(0, 5).map((x) => (
+                        <div key={x.id} style={{ textAlign: "center" }}>
+                          <img src={x.photo} alt="workout snap" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />
+                          <div style={{ ...fontBody, color: MUTED, fontSize: 8, marginTop: 1 }}>{x.date.slice(5)}</div>
+                        </div>
+                      ))}
+                    </div>
+
                     {trainerMode && (
                       <div className="mt-3 space-y-2" style={{ borderTop: `1px dashed ${LINE}`, paddingTop: 12 }}>
                         <div className="flex items-center gap-2">
@@ -1288,7 +1329,6 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
         </div>
       </Card>
 
-      <SnapCard title="Workout snaps" type="workout" snaps={snaps} addSnap={addSnap} />
     </div>
   );
 }
@@ -1436,7 +1476,6 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
         </div>
       </Card>
 
-      <SnapCard title="Meal snaps" type="meal" snaps={snaps} addSnap={addSnap} />
       </div>
 
       <div className="space-y-5">
@@ -1452,10 +1491,21 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
               );
               if (/^meal \d/i.test(t)) {
                 const ci = t.indexOf(":");
+                const mealKey = (ci > 0 ? t.slice(0, ci) : t).replace(/\s*\(.*\)/, "");
+                const mealSnaps = (snaps || []).filter((x) => x.type === "meal" && x.label === mealKey).slice(0, 4);
                 return (
                   <div key={i} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
                     <span style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 600 }}>{ci > 0 ? t.slice(0, ci + 1) : ""} </span>
                     <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6 }}>{ci > 0 ? t.slice(ci + 1) : t}</span>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <PhotoPick label="Snap" onPick={(p) => addSnap("meal", p, mealKey)} />
+                      {mealSnaps.map((x) => (
+                        <div key={x.id} style={{ textAlign: "center" }}>
+                          <img src={x.photo} alt="meal snap" style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 7, border: `1px solid ${LINE}` }} />
+                          <div style={{ ...fontBody, color: MUTED, fontSize: 8, marginTop: 1 }}>{x.date.slice(5)}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               }
@@ -1489,9 +1539,47 @@ const LEADS = ["15 min", "30 min", "1 hour", "1 day", "1 week"];
 const fmt12 = (t) => { const [h, m] = (t || "18:00").split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
 const LEAD_MS = { "15 min": 15 * 60e3, "30 min": 30 * 60e3, "1 hour": 60 * 60e3, "1 day": 24 * 3600e3, "1 week": 7 * 24 * 3600e3 };
 
+function PhotoHistoryCard({ snaps, dailyLog, progress }) {
+  const items = [
+    ...(snaps || []).map((x) => ({ id: "s" + x.id, date: x.date, photo: x.photo, label: `${x.type === "meal" ? "Meal" : "Workout"}${x.label ? ` · ${x.label}` : ""}` })),
+    ...Object.entries(dailyLog || {}).filter(([, v]) => v && v.photo).map(([d, v]) => ({ id: "d" + d, date: d, photo: v.photo, label: "Daily check-in" })),
+    ...(progress || []).filter((p) => p.photo).map((p) => ({ id: "p" + p.id, date: p.date, photo: p.photo, label: `Weigh-in · ${p.weight} lb` })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const groups = {};
+  items.forEach((it) => { const m = it.date.slice(0, 7); (groups[m] = groups[m] || []).push(it); });
+  const monthName = (m) => new Date(m + "-15T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <Eyebrow>Photo history</Eyebrow>
+        <Camera size={14} color={RED} />
+      </div>
+      {items.length === 0 ? (
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12.5, marginTop: 8, lineHeight: 1.6 }}>
+          Every photo you upload — workout snaps, meal snaps, daily check-ins, weigh-ins — collects here so you can watch the change build over weeks and months.
+        </p>
+      ) : (
+        Object.entries(groups).map(([m, arr]) => (
+          <div key={m} className="mt-3">
+            <div style={{ ...fontDisplay, color: MUTED, fontSize: 10, letterSpacing: "0.16em" }} className="uppercase">{monthName(m)} · {arr.length}</div>
+            <div className="mt-2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              {arr.map((it) => (
+                <div key={it.id}>
+                  <img src={it.photo} alt={it.label} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />
+                  <div style={{ ...fontBody, color: MUTED, fontSize: 8.5, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.date.slice(5)} · {it.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+    </Card>
+  );
+}
+
 const LOG_ITEMS = [["workout", "Workout"], ["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snack", "Snack"]];
 
-function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog, profile, setProfile, progress, setProgress }) {
+function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog, profile, setProfile, progress, setProgress, snaps }) {
   const [text, setText] = useState("");
   const today = new Date().toISOString().slice(0, 10);
   const todayLog = dailyLog[today] || {};
@@ -1802,6 +1890,8 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
           );
         })
       )}
+
+      <PhotoHistoryCard snaps={snaps} dailyLog={dailyLog} progress={progress} />
     </div>
   );
 }
@@ -2508,7 +2598,7 @@ export default function App() {
   const setDailyLog = (v) => { setDailyLogState(v); sset("pt:daily-log", v); };
   const setSnaps = (v) => { setSnapsState(v); sset("pt:snaps", v); };
   const setInterests = (v) => { setInterestsState(v); sset("pt:interests", v); };
-  const addSnap = (type, photo) => setSnaps([{ id: Date.now().toString(), date: new Date().toISOString().slice(0, 10), type, photo }, ...snaps].slice(0, 12));
+  const addSnap = (type, photo, label) => setSnaps([{ id: Date.now().toString(), date: new Date().toISOString().slice(0, 10), type, photo, label: label || "" }, ...snaps].slice(0, 30));
 
   /* declare color-scheme so browsers with forced/auto dark mode don't re-invert the light theme */
   useEffect(() => {
@@ -2738,7 +2828,7 @@ export default function App() {
             {tab === "track" && (
               <AccountabilityTab commitments={commitments} setCommitments={setCommitments}
                 dailyLog={dailyLog} setDailyLog={setDailyLog} profile={profile}
-                setProfile={setProfile} progress={progress} setProgress={setProgress} />
+                setProfile={setProfile} progress={progress} setProgress={setProgress} snaps={snaps} />
             )}
             {tab === "groups" && <GroupsTab profile={profile} posts={posts} setPosts={setPosts} interests={interests} setInterests={setInterests} />}
 
