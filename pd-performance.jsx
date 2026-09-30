@@ -1048,7 +1048,7 @@ function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel }) {
 }
 
 function ExerciseList({ exercises, snaps, addSnap, dayLabel }) {
-  const isSS = (x) => (x?.note || "").toLowerCase().includes("superset");
+  const isSS = (x) => (x?.note || "").toLowerCase().includes("superset with");
   const rows = [];
   for (let i = 0; i < exercises.length; i++) {
     const a = exercises[i], b = exercises[i + 1];
@@ -1438,7 +1438,7 @@ function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snap
   const [loading, setLoading] = useState(false);
   const [allergyInput, setAllergyInput] = useState("");
 
-  useEffect(() => setPrefs(dietPrefs), [dietPrefs]);
+  useEffect(() => { setPrefs(dietPrefs); }, [dietPrefs]);
 
   const update = (patch) => {
     const n = { ...prefs, ...patch };
@@ -2169,7 +2169,7 @@ function CoachTab({ profile, dietPrefs, plan }) {
   const [loading, setLoading] = useState(false);
   const endRef = useRef(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), [msgs, loading]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [msgs, loading]);
 
   const send = async () => {
     const q = input.trim();
