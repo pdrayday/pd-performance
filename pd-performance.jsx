@@ -4419,9 +4419,11 @@ export default function App() {
   const toggleTrainer = () => {
     if (trainerMode) { setTrainerMode(false); return; }
     const stored = trainerCfg.pin || "4343";
-    const entered = prompt("Enter trainer PIN:");
-    if (entered === stored) setTrainerMode(true);
-    else if (entered !== null) alert("Wrong PIN.");
+    const entered = prompt("Enter your PIN — trainer or trainee:");
+    if (entered === null) return;
+    if (entered.trim() === stored) { setTrainerMode(true); return; }
+    if (clientPinLogin(entered, trainerCfg.clients)) return;
+    alert("PIN not recognized — trainees: ask your trainer for your personal PIN.");
   };
 
   const tabs = [
@@ -4547,7 +4549,7 @@ export default function App() {
             <button onClick={() => { toggleTrainer(); setShowMenu(false); }} className="flex items-center gap-3 w-full mt-2"
               style={{ background: trainerMode ? RED : SURFACE2, border: `1px solid ${trainerMode ? RED : LINE}`, borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
               {trainerMode ? <Unlock size={15} color="#fff" /> : <Lock size={15} color={RED} />}
-              <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: trainerMode ? "#fff" : PAPER }} className="uppercase">{trainerMode ? "Exit trainer mode" : "Trainer sign-in"}</span>
+              <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: trainerMode ? "#fff" : PAPER }} className="uppercase">{trainerMode ? "Exit trainer mode" : "Trainer / Trainee sign-in"}</span>
             </button>
             {trainerMode && (
               <button onClick={() => { setShowTrainerPanel(true); setShowMenu(false); }} className="flex items-center gap-3 w-full mt-2"
@@ -4580,6 +4582,9 @@ export default function App() {
           <div className="space-y-2">
             <PhotoPick label={profile.avatar ? "Change photo" : "Set profile photo"} icon={ImagePlus}
               onPick={(p) => { setProfile({ ...profile, avatar: p }); }} />
+            <Btn variant="ghost" onClick={() => { toggleTrainer(); setShowAccount(false); }} style={{ width: "100%", justifyContent: "center" }}>
+              {trainerMode ? <Unlock size={14} /> : <Lock size={14} />} {trainerMode ? "Exit trainer mode" : "Trainer / Trainee sign-in"}
+            </Btn>
             <Btn variant="ghost" onClick={() => { setShowSettings(true); setShowAccount(false); }} style={{ width: "100%", justifyContent: "center" }}>
               <Settings size={14} /> Settings
             </Btn>
