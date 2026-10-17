@@ -1141,8 +1141,8 @@ function downloadSplitPdf(activeSplit, isCustom, light, preview) {
     st.y += 8;
   });
   pdfLine(st, "CARDIO & ABS", { red: true, bold: true, size: 12, gap: 4 });
-  pdfLine(st, "Warm-up cardio, every workout — 1 mile chill run or 15 min on the stair stepper.", { indent: true, bullet: true });
-  pdfLine(st, "Abs every day except leg days (Monday & Thursday) — pick 2–3 core moves, 3 sets each.", { indent: true, bullet: true });
+  pdfLine(st, activeSplit[0]?.warmup ? `Warm-up cardio, every workout — ${activeSplit[0].warmup}` : "Warm-up cardio, every workout — 1 mile chill run or 15 min on the stair stepper.", { indent: true, bullet: true });
+  pdfLine(st, activeSplit[0]?.abs ? `Abs — ${activeSplit[0].abs}` : "Abs every day except leg days (Monday & Thursday) — pick 2–3 core moves, 3 sets each.", { indent: true, bullet: true });
   if (preview) window.open(st.doc.output("bloburl"), "_blank");
   else st.doc.save("pd-workout-plan.pdf");
 }
@@ -1196,7 +1196,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
   };
 
   const activeSplit = customSplit
-    ? customSplit.days.map((d) => ({ day: d.day, focus: d.focus, tag: d.notes, hyrox: false, exercises: [] }))
+    ? customSplit.days.map((d) => ({ day: d.day, focus: d.focus, tag: d.notes, hyrox: false, exercises: d.exercises || [], warmup: customSplit.warmup, abs: customSplit.abs }))
     : SPLIT;
 
   const PlatformLogo = getPlatform(profile.aiPlatform).Logo;
@@ -1390,13 +1390,13 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
           <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
             <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Warm-up cardio — every workout</div>
             <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
-              1 mile chill run or 15 min on the stair stepper at the beginning of every session.
+              {customSplit?.warmup || "1 mile chill run or 15 min on the stair stepper at the beginning of every session."}
             </div>
           </div>
           <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
             <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Abs — every day except leg days</div>
             <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
-              Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each.
+              {customSplit?.abs || "Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each."}
             </div>
           </div>
         </div>
