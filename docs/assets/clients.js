@@ -11,7 +11,7 @@
 (function () {
   var PROGRAMS = {
     cj: {
-      v: 1,
+      v: 2,
       profile: { name: "CJ", age: "30", heightIn: "74", weightLb: "280", goal: "Recomposition (lose fat + build muscle)" },
       dietPrefs: {
         dietGoal: "Fat loss (cut)", mealsPerDay: "3", likes: "Anything", dislikes: "", allergies: [],
@@ -19,20 +19,22 @@
       },
       split: {
         summary:
-          "CJ's 4-day version of the coach's split: one Hyrox-style leg day, one push day, one pull day and one Hyrox + shoulders day, 60 minutes each. Weeks 1-2: learn the movements and leave 3 reps in the tank. After that, add a rep each week; once every set hits the top of the rep range, add weight. Runs are swapped for incline walking, rowing or the bike until you're under ~255 lb to protect knees and shins. Week 9 is a lighter deload week.",
+          "CJ's 4-day version of the coach's split: one Hyrox-style leg day, one push day, one pull day and one Hyrox + shoulders day, 60 minutes each. Weeks 1-2: learn the movements and leave 3 reps in the tank. After that, add a rep each week; once every set hits the top of the rep range, add weight. Runs are swapped for the stair stepper and bike until you're under ~255 lb to protect knees and shins. Week 9 is a lighter deload week.",
         warmup:
           "10 min incline walk (3.0-3.3 mph, 6-8% incline) or the stair stepper at an easy pace. Swap in the 1 mile chill run once you're under ~255 lb.",
         abs:
-          "Tuesday and Thursday after lifting: pick 2 of planks (30-45 sec), dead bugs (8/side), cable crunches (12-15) - 3 sets each. Monday and Friday skip it; the circuits cover core.",
+          "Tuesday and Thursday after lifting: plank 30-45 sec, then straight into crunches (15-20). Rest 1 minute, then one more round of plank + crunches. Monday and Friday skip it; the circuits cover core.",
         days: [
           {
             day: "Monday", focus: "Legs + Hyrox-lite", notes: "Hyrox-style circuit first, then lower-body strength",
             exercises: [
-              { name: "Hyrox-lite circuit", sets: 3, reps: "rounds", note: "0.25 mi incline walk (or 400 m row) + sled push 2 lengths · start with 2-4 plates, add a plate when it feels easy · rest 90 sec" },
-              { name: "Goblet squat to box", sets: 4, reps: "8–12", note: "first lift — solo · box at parallel · move to back squat around week 5" },
+              { name: "Hyrox-lite circuit", sets: 2, reps: "rounds", note: "5 min slow stair stepper + sled push 2 lengths · start with 2-4 plates, add a plate when it feels easy · rest 90 sec" },
+              { name: "Smith machine squat", sets: 3, reps: "8–12", note: "first lift — solo · feet slightly forward, hips to parallel" },
               { name: "Dumbbell Romanian deadlift", sets: 3, reps: "10–12", note: "soft knees, hips back, flat back · feel the hamstrings" },
-              { name: "Hamstring curl machine", sets: 3, reps: "10–12", note: "superset with calf machine" },
-              { name: "Calf machine", sets: 3, reps: "12–15", note: "superset with hamstring curls · pause at the bottom" },
+              { name: "Hamstring curl machine", sets: 3, reps: "10–12", note: "superset with standing calf raise" },
+              { name: "Standing calf raise machine", sets: 3, reps: "12–15", note: "superset with hamstring curls · pause at the bottom" },
+              { name: "Leg extension", sets: 3, reps: "12–15", note: "superset with seated calf raise · squeeze 1 sec at the top" },
+              { name: "Seated calf raise machine", sets: 3, reps: "12–15", note: "superset with leg extensions · full stretch at the bottom" },
             ],
           },
           {
@@ -50,24 +52,24 @@
             day: "Thursday", focus: "Back & Triceps", notes: "Pull plus arms",
             exercises: [
               { name: "Lat pulldown", sets: 4, reps: "8–12", note: "first exercise — solo, no superset · pull to upper chest" },
-              { name: "Chest-supported row", sets: 3, reps: "10–12", note: "superset with rope pushdown · squeeze 1 sec" },
-              { name: "Rope pushdown", sets: 3, reps: "10–15", note: "superset with chest-supported row" },
-              { name: "Seated cable row", sets: 3, reps: "10–12", note: "superset with overhead cable extension · flat back" },
-              { name: "Overhead cable extension", sets: 3, reps: "10–12", note: "superset with cable row · stands in for dips for now" },
+              { name: "Row machine (any)", sets: 3, reps: "10–12", note: "superset with rope tricep extensions · squeeze 1 sec" },
+              { name: "Rope tricep extension (cable)", sets: 3, reps: "10–15", note: "superset with row machine · elbows pinned" },
+              { name: "Seated cable row", sets: 3, reps: "10–12", note: "superset with leaning overhead cable extensions · flat back" },
+              { name: "Leaning overhead cable extension", sets: 3, reps: "10–12", note: "superset with seated cable row · lean forward, full stretch behind the head" },
             ],
           },
           {
             day: "Friday", focus: "Hyrox + Shoulders", notes: "Engine work, then delts",
             exercises: [
-              { name: "Hyrox-lite station 1", sets: 1, reps: "round", note: "5 min bike or row, hard but steady + sled push 2 lengths" },
-              { name: "Hyrox-lite station 2", sets: 1, reps: "round", note: "5 min bike or row + 40 wall balls (10-14 lb) — break them up · build toward 100 by month 3" },
+              { name: "Hyrox-lite station 1", sets: 1, reps: "round", note: "5 min bike, hard but steady + sled push 2 lengths" },
+              { name: "Hyrox-lite station 2", sets: 1, reps: "round", note: "5 min bike + 50 wall balls (10-14 lb) — break them up as needed" },
               { name: "Seated dumbbell shoulder press", sets: 3, reps: "8–12", note: "back supported · graduates to standing military press later" },
               { name: "Rear delt fly", sets: 3, reps: "12–15", note: "superset with lateral raise · cables or fly machine" },
               { name: "Lateral raise", sets: 3, reps: "12–15", note: "superset with rear delt fly · light, strict" },
               { name: "Walking lunges", sets: 2, reps: "10/leg", note: "bodyweight — hold dumbbells once these feel easy" },
             ],
           },
-          { day: "Saturday", focus: "Rest", notes: "Active rest — 8-10k steps. Optional: easy hike, bike ride or pickup sport." },
+          { day: "Saturday", focus: "Rest", notes: "Active rest — hit 8-10k steps. A 30-45 min walk is the workout today." },
           { day: "Sunday", focus: "Rest", notes: "Full rest. Walk, stretch, sleep, hydrate — recovery is where the growth happens." },
         ],
       },
