@@ -19,7 +19,7 @@
       },
       split: {
         summary:
-          "CJ's 4-day version of the coach's split: one Hyrox-style leg day, one push day, one pull day and one Hyrox + shoulders day, 60 minutes each. Weeks 1-2: learn the movements and leave 3 reps in the tank. After that, add a rep each week; once every set hits the top of the rep range, add weight. Runs are swapped for the stair stepper and bike until you're under ~255 lb to protect knees and shins. Week 9 is a lighter deload week.",
+          "CJ's 4-day version of the coach's split: one Hyrox-style leg day, one push day, one pull day and one Hyrox + shoulders day, 60 minutes each. Add a rep each week; once every set hits the top of the rep range, add weight. Runs are swapped for the stair stepper and bike until you're under ~255 lb to protect knees and shins.",
         warmup:
           "10 min incline walk (3.0-3.3 mph, 6-8% incline) or the stair stepper at an easy pace. Swap in the 1 mile chill run once you're under ~255 lb.",
         abs:
