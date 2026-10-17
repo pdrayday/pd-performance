@@ -3,7 +3,7 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon, Link2, Download
+  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -21,13 +21,17 @@ const fontBody = { fontFamily: "'Inter', sans-serif" };
 const fontMono = { fontFamily: "'IBM Plex Mono', monospace" };
 
 /* ---------- storage helpers (host storage when available, localStorage on the web) ---------- */
+/* personal spaces: when a client signs in with their PIN, their data lives under its own
+   namespace — nobody else on the device sees it, and they can't see anyone else's. */
+const STORAGE_NS = (() => { try { return localStorage.getItem("pt-web:ns") || ""; } catch { return ""; } })();
+const nsKey = (k, shared) => (shared ? k : `${STORAGE_NS}${k}`);
 const sget = async (k, shared = false) => {
   try {
     if (typeof window !== "undefined" && window.storage?.get) {
-      const r = await window.storage.get(k, shared);
+      const r = await window.storage.get(nsKey(k, shared), shared);
       return r ? JSON.parse(r.value) : null;
     }
-    const v = localStorage.getItem(`pt-web:${k}`);
+    const v = localStorage.getItem(`pt-web:${nsKey(k, shared)}`);
     return v ? JSON.parse(v) : null;
   } catch {
     return null;
@@ -36,9 +40,9 @@ const sget = async (k, shared = false) => {
 const sset = async (k, v, shared = false) => {
   try {
     if (typeof window !== "undefined" && window.storage?.set) {
-      await window.storage.set(k, JSON.stringify(v), shared);
+      await window.storage.set(nsKey(k, shared), JSON.stringify(v), shared);
     } else {
-      localStorage.setItem(`pt-web:${k}`, JSON.stringify(v));
+      localStorage.setItem(`pt-web:${nsKey(k, shared)}`, JSON.stringify(v));
     }
   } catch (e) {
     console.error("storage error", e);
@@ -416,17 +420,19 @@ const GrokLogo = ({ s = 14 }) => (
 );
 
 /* ---------- AI platform config (default: ChatGPT) ---------- */
-const AI_CONTEXT = "You are my PD Performance training assistant. I follow a push/pull muscle-building split with an optional Hyrox/CrossFit-style conditioning day. Help me with training, nutrition, and recovery.";
+const AI_FOLDER = 'Keep this chat and all my future PD Performance chats organized in a folder/project named "pd performance" — create it if it does not exist yet.';
+const AI_CONTEXT = `You are my PD Performance training assistant (my online personal training program, app: https://pdrayday.github.io/pd-performance/). My default program is a 6-day split: Monday — Legs with a Hyrox/CrossFit-style circuit (rounds of a 0.7 mi run + a station: sled push 2 lengths with eight 45 lb plates, lunges with a 70 lb EZ bar for 4 distances), then box jumps, squats or split squats, and a hamstring-curl/calf superset. Tuesday & Friday — Chest & Biceps (first exercise solo, then supersets). Wednesday & Saturday — Back & Triceps (same structure). Thursday — Hyrox stations (0.7 mi run + sled push, 0.7 mi run + 100 wall balls) plus Shoulders (military press, rear delts, lateral raises, 4x8-12). Sunday — full rest. Every session starts with warm-up cardio (1 mile easy run or 15 min stair stepper) and ends with abs, except leg days (Mon/Thu). If I miss a day I combine it with the next day instead of skipping it. Nutrition rules: high protein (about 1 g per lb of body weight), extra carbs must be earned with cardio — run first, then eat the carbs — and about 120 oz of water daily. Act as my expert coach for training, nutrition, recovery, and motivation: answer my questions, adjust workouts to my schedule and equipment, suggest meals that hit my macros, and keep everything consistent with this program. Keep answers practical, specific, and concise.`;
+const AI_INTRO = `${AI_FOLDER}\n\n${AI_CONTEXT}`;
 const AI_PLATFORMS = [
-  { id: "google", name: "Google", Logo: GoogleLogo, url: `https://www.google.com/search?udm=50&q=${encodeURIComponent(AI_CONTEXT)}` },
-  { id: "chatgpt", name: "ChatGPT", Logo: ChatGPTLogo, url: `https://chatgpt.com/?q=${encodeURIComponent(`File this chat in my "pd performance" project folder. ${AI_CONTEXT}`)}` },
+  { id: "google", name: "Google", Logo: GoogleLogo, url: `https://www.google.com/search?udm=50&q=${encodeURIComponent(AI_INTRO)}` },
+  { id: "chatgpt", name: "ChatGPT", Logo: ChatGPTLogo, url: `https://chatgpt.com/?q=${encodeURIComponent(AI_INTRO)}` },
   { id: "gemini", name: "Gemini", Logo: GeminiLogo, url: "https://gemini.google.com/app" },
-  { id: "claude", name: "Claude", Logo: ClaudeLogo, url: `https://claude.ai/new?q=${encodeURIComponent(AI_CONTEXT)}` },
-  { id: "perplexity", name: "Perplexity", Logo: PerplexityLogo, url: `https://www.perplexity.ai/search?q=${encodeURIComponent(AI_CONTEXT)}` },
-  { id: "grok", name: "Grok", Logo: GrokLogo, url: `https://grok.com/?q=${encodeURIComponent(AI_CONTEXT)}` },
+  { id: "claude", name: "Claude", Logo: ClaudeLogo, url: `https://claude.ai/new?q=${encodeURIComponent(AI_INTRO)}` },
+  { id: "perplexity", name: "Perplexity", Logo: PerplexityLogo, url: `https://www.perplexity.ai/search?q=${encodeURIComponent(AI_INTRO)}` },
+  { id: "grok", name: "Grok", Logo: GrokLogo, url: `https://grok.com/?q=${encodeURIComponent(AI_INTRO)}` },
 ];
 const aiLink = (id, prompt) => {
-  const q = encodeURIComponent(prompt);
+  const q = encodeURIComponent(`${AI_FOLDER}\n\n${prompt}`);
   switch (id) {
     case "google": return `https://www.google.com/search?udm=50&q=${q}`;
     case "gemini": return "https://gemini.google.com/app";
@@ -438,6 +444,46 @@ const aiLink = (id, prompt) => {
 };
 
 const getPlatform = (id) => AI_PLATFORMS.find((p) => p.id === id) || AI_PLATFORMS.find((p) => p.id === "chatgpt");
+
+/* ---------- client PINs — each client gets a private space on any device ---------- */
+const DEFAULT_CLIENTS = [
+  { pin: "1111", name: "Logan", cid: "logan" },
+  { pin: "2222", name: "CJ", cid: "cj" },
+];
+const clientPinLogin = (pin, extraClients) => {
+  const all = [...(extraClients || []), ...DEFAULT_CLIENTS];
+  const c = all.find((x) => x.pin === pin.trim());
+  if (!c) return false;
+  try {
+    const ns = `c${c.pin}:`;
+    localStorage.setItem("pt-web:ns", ns);
+    localStorage.setItem(`pt-web:${ns}pt:session`, JSON.stringify({ provider: "pin", name: c.name, at: Date.now() }));
+    const profKey = `pt-web:${ns}pt:profile`;
+    if (!localStorage.getItem(profKey)) {
+      localStorage.setItem(profKey, JSON.stringify({ name: c.name, age: "", heightIn: "", weightLb: "", goal: "", addon: false, aiPlatform: "chatgpt" }));
+    }
+    /* preload this client's coach-assigned program (from clients.js) into their space */
+    try {
+      const prog = (window.PD_CLIENT_PROGRAMS || {})[c.cid];
+      if (prog) {
+        const P = `pt-web:${ns}`;
+        const appliedRaw = localStorage.getItem(`${P}pt:client-applied`);
+        const applied = appliedRaw ? JSON.parse(appliedRaw) : null;
+        if (!applied || applied.v !== prog.v) {
+          localStorage.setItem(`${P}pt:custom-split`, JSON.stringify(prog.split));
+          localStorage.setItem(`${P}pt:diet-plan`, JSON.stringify(prog.dietPlan));
+          localStorage.setItem(`${P}pt:diet-prefs`, JSON.stringify(prog.dietPrefs));
+          const cur = JSON.parse(localStorage.getItem(profKey) || "{}");
+          Object.entries(prog.profile || {}).forEach(([k, v]) => { if (!cur[k]) cur[k] = v; });
+          localStorage.setItem(profKey, JSON.stringify(cur));
+          localStorage.setItem(`${P}pt:client-applied`, JSON.stringify({ id: c.cid, v: prog.v, at: new Date().toISOString() }));
+        }
+      }
+    } catch {}
+    window.location.reload();
+  } catch { return false; }
+  return true;
+};
 
 /* ---------- SEO / GEO content (rendered in footer + JSON-LD) ---------- */
 const SEO_DESC = "PD Performance is an online personal training program: a customizable muscle-building split, an optional Hyrox/CrossFit-style conditioning day, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Free to join — coaching plans from $250/month.";
@@ -472,13 +518,14 @@ const INDUSTRY_FAQS = [
 
 /* ---------- small UI atoms ---------- */
 const Eyebrow = ({ children }) => (
-  <h2 style={{ ...fontDisplay, color: RED, letterSpacing: "0.22em", fontSize: 11, fontWeight: 600, margin: 0 }} className="uppercase">
+  <h2 className="uppercase flex items-center" style={{ ...fontDisplay, color: RED, letterSpacing: "0.22em", fontSize: 11, fontWeight: 600, margin: 0 }}>
+    <span aria-hidden="true" style={{ display: "inline-block", width: 14, height: 3, background: RED, borderRadius: 99, marginRight: 8, flexShrink: 0 }} />
     {children}
   </h2>
 );
 
 const Card = ({ children, style, className }) => (
-  <div className={className} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, ...style }}>
+  <div className={className} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 18, padding: 18, ...style }}>
     {children}
   </div>
 );
@@ -486,7 +533,7 @@ const Card = ({ children, style, className }) => (
 const Btn = ({ children, onClick, variant = "red", disabled, style }) => {
   const base = {
     ...fontDisplay, letterSpacing: "0.08em", fontWeight: 600, fontSize: 13,
-    padding: "10px 16px", borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer",
+    padding: "9px 15px", borderRadius: 99, cursor: disabled ? "not-allowed" : "pointer",
     border: "1px solid transparent", opacity: disabled ? 0.5 : 1,
     display: "inline-flex", alignItems: "center", gap: 8, transition: "transform .08s ease",
   };
@@ -569,6 +616,473 @@ const SnapThumb = ({ x, size = 26 }) => x.video ? (
 ) : (
   <img src={x.photo} alt={x.label || "snap"} style={{ width: size, height: size, objectFit: "cover", borderRadius: 6, border: `1px solid ${LINE}` }} />
 );
+
+/* green completion checkbox — sits next to every camera */
+const GREEN = "#22c55e";
+function DoneBox({ id, isDone, toggleDone }) {
+  const on = isDone(id);
+  return (
+    <button onClick={() => toggleDone(id)} title={on ? "Completed — tap to undo" : "Mark as completed"} aria-label={on ? "Completed — tap to undo" : "Mark as completed"}
+      style={{ background: on ? "rgba(34,197,94,0.15)" : SURFACE2, border: `1.5px solid ${on ? GREEN : LINE}`, borderRadius: 7, width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0, transition: "border-color .12s, background .12s" }}>
+      <Check size={15} color={on ? GREEN : MUTED} strokeWidth={on ? 3 : 2} style={{ opacity: on ? 1 : 0.4 }} />
+    </button>
+  );
+}
+
+/* one-tap iMessage check-in to the coach */
+function CheckInCard({ summary, phone, copyText, copyLabel }) {
+  const num = (phone || "").replace(/[^+\d]/g, "");
+  const [copied, setCopied] = useState(false);
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <Eyebrow>Daily check-in</Eyebrow>
+        <MessageCircle size={16} color={GREEN} />
+      </div>
+      <p style={{ ...fontBody, color: MUTED, fontSize: 12.5, lineHeight: 1.55, marginTop: 8 }}>
+        Done for the day? Text your coach the full checklist, or copy this tab's list to paste into a group chat on Community.
+      </p>
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <Btn onClick={() => { window.location.href = `sms:${num}&body=${encodeURIComponent(summary)}`; }}>
+          <MessageCircle size={14} /> Text my coach
+        </Btn>
+        {copyText && (
+          <Btn variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(copyText); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {} }}>
+            {copied ? <Check size={14} color={GREEN} /> : <ClipboardList size={14} />} {copied ? "Copied" : copyLabel || "Copy for chat"}
+          </Btn>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/* ---------- quick macro estimator (works offline — common foods, per-serving) ---------- */
+const FOOD_DB = [
+  { k: ["chicken breast", "grilled chicken", "chicken"], u: "oz", per: [47, 8.8, 1, 0], def: 6 },
+  { k: ["ground beef", "hamburger meat"], u: "oz", per: [50, 7, 2.5, 0], def: 6 },
+  { k: ["steak", "sirloin", "beef", "ribeye"], u: "oz", per: [55, 7.6, 2.7, 0], def: 6 },
+  { k: ["ground turkey", "turkey"], u: "oz", per: [47, 7, 2, 0], def: 6 },
+  { k: ["salmon"], u: "oz", per: [58, 6.3, 3.7, 0], def: 6 },
+  { k: ["tuna"], u: "oz", per: [37, 8, 0.3, 0], def: 5 },
+  { k: ["tilapia", "cod", "white fish", "fish"], u: "oz", per: [31, 6.5, 0.3, 0], def: 6 },
+  { k: ["shrimp"], u: "oz", per: [28, 6, 0.3, 0], def: 5 },
+  { k: ["egg white"], u: "cup", per: [126, 26, 0, 2], def: 1 },
+  { k: ["egg"], u: "each", per: [72, 6.3, 4.8, 0.4], def: 2 },
+  { k: ["greek yogurt", "oikos", "yogurt"], u: "each", per: [120, 15, 0.5, 8], def: 1 },
+  { k: ["brown rice"], u: "cup", per: [216, 5, 1.8, 45], def: 1 },
+  { k: ["rice cake"], u: "each", per: [35, 0.7, 0.3, 7.3], def: 1 },
+  { k: ["rice"], u: "cup", per: [205, 4.3, 0.4, 45], def: 1 },
+  { k: ["sweet potato"], u: "each", per: [115, 2, 0.1, 27], def: 1 },
+  { k: ["mashed potato"], u: "cup", per: [210, 4, 9, 30], def: 1 },
+  { k: ["potato"], u: "each", per: [160, 4, 0.2, 37], def: 1 },
+  { k: ["oats", "oatmeal"], u: "cup", per: [307, 11, 5, 55], def: 0.5 },
+  { k: ["bagel"], u: "each", per: [280, 11, 1.5, 56], def: 1 },
+  { k: ["tortilla", "wrap"], u: "each", per: [140, 4, 3.5, 24], def: 1 },
+  { k: ["bread", "toast"], u: "slice", per: [80, 4, 1, 14], def: 2 },
+  { k: ["pasta", "spaghetti", "noodles"], u: "cup", per: [220, 8, 1.3, 43], def: 1.5 },
+  { k: ["protein shake", "protein scoop", "whey", "protein powder", "shake"], u: "scoop", per: [120, 24, 1.5, 3], def: 1 },
+  { k: ["peanut butter", "almond butter", "pb"], u: "tbsp", per: [95, 4, 8, 3.5], def: 2 },
+  { k: ["banana"], u: "each", per: [105, 1.3, 0.4, 27], def: 1 },
+  { k: ["apple"], u: "each", per: [95, 0.5, 0.3, 25], def: 1 },
+  { k: ["orange"], u: "each", per: [62, 1.2, 0.2, 15], def: 1 },
+  { k: ["berries", "strawberries", "blueberries"], u: "cup", per: [65, 1, 0.4, 16], def: 1 },
+  { k: ["avocado"], u: "each", per: [240, 3, 22, 13], def: 0.5 },
+  { k: ["olive oil"], u: "tbsp", per: [119, 0, 13.5, 0], def: 1 },
+  { k: ["butter"], u: "tbsp", per: [102, 0.1, 11.5, 0], def: 1 },
+  { k: ["cottage cheese"], u: "cup", per: [220, 25, 10, 8], def: 1 },
+  { k: ["cheese"], u: "oz", per: [110, 7, 9, 0.5], def: 1 },
+  { k: ["milk"], u: "cup", per: [122, 8, 5, 12], def: 1 },
+  { k: ["black beans", "beans"], u: "cup", per: [227, 15, 0.9, 41], def: 0.5 },
+  { k: ["quinoa"], u: "cup", per: [222, 8, 3.6, 39], def: 1 },
+  { k: ["broccoli", "asparagus", "green beans", "veggies", "vegetables", "salad", "greens", "spinach"], u: "cup", per: [35, 2.5, 0.3, 7], def: 1.5 },
+  { k: ["bacon"], u: "slice", per: [43, 3, 3.3, 0.1], def: 3 },
+  { k: ["sausage"], u: "each", per: [170, 10, 14, 1], def: 2 },
+  { k: ["burrito"], u: "each", per: [600, 30, 22, 65], def: 1 },
+  { k: ["chipotle bowl", "burrito bowl"], u: "each", per: [700, 45, 22, 65], def: 1 },
+  { k: ["burger", "cheeseburger"], u: "each", per: [450, 25, 24, 35], def: 1 },
+  { k: ["pizza"], u: "slice", per: [285, 12, 10, 36], def: 2 },
+  { k: ["fries", "french fries"], u: "each", per: [365, 4, 17, 48], def: 1 },
+  { k: ["wings", "chicken wings"], u: "each", per: [90, 8, 6, 0], def: 6 },
+  { k: ["sushi", "roll"], u: "each", per: [300, 10, 5, 45], def: 2 },
+  { k: ["sandwich", "sub"], u: "each", per: [400, 22, 14, 42], def: 1 },
+  { k: ["honey"], u: "tbsp", per: [64, 0, 0, 17], def: 1 },
+  { k: ["mayo"], u: "tbsp", per: [94, 0, 10, 0], def: 1 },
+];
+const FRACTIONS = { "½": 0.5, "¼": 0.25, "¾": 0.75 };
+function estimateMacrosLocal(text) {
+  const segs = text.toLowerCase().split(/[,;\n]| and | with | \+ |\u00b7/).map((x) => x.trim()).filter(Boolean);
+  let cal = 0, p = 0, f = 0, c = 0, hits = 0;
+  const used = new Set();
+  segs.forEach((seg) => {
+    const entry = FOOD_DB.find((e) => !used.has(e) && e.k.some((kw) => seg.includes(kw))) ||
+                  FOOD_DB.find((e) => e.k.some((kw) => seg.includes(kw)));
+    if (!entry) return;
+    used.add(entry);
+    hits++;
+    const m = seg.match(/(\d+(?:\.\d+)?|½|¼|¾)\s*(oz|ounces?|g|grams?|cups?|tbsps?|tablespoons?|scoops?|slices?|eggs?|cakes?|pieces?)?/);
+    let n = m ? (FRACTIONS[m[1]] ?? parseFloat(m[1])) : null;
+    let unit = m && m[2] ? m[2].replace(/s$/, "") : null;
+    if (unit === "ounce") unit = "oz";
+    if (unit === "gram") unit = "g";
+    if (unit === "tablespoon") unit = "tbsp";
+    if (unit === "egg" || unit === "cake" || unit === "piece") unit = "each";
+    let servings;
+    if (n == null) servings = entry.def;
+    else if (unit === entry.u) servings = n;
+    else if (unit === "g" && entry.u === "oz") servings = n / 28.35;
+    else if (unit === "oz" && entry.u === "cup") servings = n / 8;
+    else if (!unit && (entry.u === "oz" || entry.u === "g")) servings = entry.def;
+    else if (!unit) servings = n;
+    else servings = entry.def;
+    cal += entry.per[0] * servings; p += entry.per[1] * servings; f += entry.per[2] * servings; c += entry.per[3] * servings;
+  });
+  if (!hits) return { cal: 450, p: 30, f: 15, c: 45, rough: true };
+  return { cal: Math.round(cal), p: Math.round(p), f: Math.round(f), c: Math.round(c) };
+}
+
+/* log what you actually ate for a meal — with auto macro estimate */
+function MealSwap({ note, onSave, onClear }) {
+  const [open, setOpen] = useState(false);
+  const [txt, setTxt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const estimate = async () => {
+    const t = txt.trim();
+    if (!t) return;
+    setBusy(true);
+    let m = null;
+    try {
+      const raw = await askClaude([{ role: "user", content: `Estimate total calories and macros for this meal: "${t}". Respond ONLY with JSON like {"cal":520,"protein":42,"fat":18,"carbs":45} — integers, nothing else.` }], 200);
+      const j = JSON.parse(raw.replace(/```json|```/g, "").match(/\{[\s\S]*\}/)[0]);
+      if (j && j.cal > 0) m = { cal: Math.round(j.cal), p: Math.round(j.protein), f: Math.round(j.fat), c: Math.round(j.carbs) };
+    } catch { /* built-in estimator takes over */ }
+    if (!m) m = estimateMacrosLocal(t);
+    onSave({ text: t, cal: m.cal, p: m.p, f: m.f, c: m.c });
+    setTxt(""); setOpen(false); setBusy(false);
+  };
+  if (note) return (
+    <div className="mt-2" style={{ border: `1px solid ${GREEN}`, background: "rgba(34,197,94,0.08)", borderRadius: 8, padding: "8px 10px" }}>
+      <div className="flex items-start justify-between gap-2">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, color: PAPER, fontSize: 12, fontWeight: 600 }}>Ate instead: <span style={{ fontWeight: 400 }}>{note.text}</span></div>
+          <div style={{ ...fontMono, color: GREEN, fontSize: 11, marginTop: 2 }}>≈ {note.cal} cal · {note.p}P / {note.f}F / {note.c}C (estimate)</div>
+        </div>
+        <button onClick={onClear} aria-label="Remove swapped meal" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 2 }}>
+          <X size={13} color={MUTED} />
+        </button>
+      </div>
+    </div>
+  );
+  return (
+    <div className="mt-2">
+      {open ? (
+        <div className="space-y-2">
+          <textarea style={{ ...inputStyle, minHeight: 54, resize: "vertical" }} placeholder="What did you actually eat? e.g. 8 oz steak, 1 cup rice, salad with olive oil"
+            value={txt} onChange={(e) => setTxt(e.target.value)} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Btn onClick={estimate} disabled={busy || !txt.trim()}>
+              {busy ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />} {busy ? "Estimating…" : "Estimate macros & save"}
+            </Btn>
+            <Btn variant="ghost" onClick={() => { setOpen(false); setTxt(""); }}>Cancel</Btn>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setOpen(true)}
+          style={{ ...fontDisplay, color: MUTED, fontSize: 10, letterSpacing: "0.12em", background: "none", border: `1px dashed ${LINE}`, borderRadius: 7, padding: "5px 9px", cursor: "pointer" }} className="uppercase">
+          Ate something different? Log it
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* small save-on-blur note field — flows into the coach check-in */
+function NoteBox({ label, placeholder, value, onSave, compact }) {
+  const [txt, setTxt] = useState(value || "");
+  useEffect(() => { setTxt(value || ""); }, [value]);
+  return (
+    <div className={compact ? "mt-2" : "mt-3"}>
+      {label && <div style={{ ...fontDisplay, color: MUTED, fontSize: 10, letterSpacing: "0.14em", marginBottom: 5 }} className="uppercase">{label}</div>}
+      <textarea style={{ ...inputStyle, minHeight: compact ? 40 : 64, resize: "vertical" }} placeholder={placeholder}
+        value={txt} onChange={(e) => setTxt(e.target.value)} onBlur={() => onSave(txt.trim())} />
+      {(value || "").trim() ? (
+        <div style={{ ...fontBody, color: GREEN, fontSize: 10.5, marginTop: 3 }}>Saved — this goes into your coach check-in ✓</div>
+      ) : null}
+    </div>
+  );
+}
+
+/* compact per-exercise note — collapsed to a "+ note" chip until used */
+function RowNote({ value, onSave, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [txt, setTxt] = useState(value || "");
+  useEffect(() => { setTxt(value || ""); }, [value]);
+  if (!open && !(value || "").trim()) return (
+    <button onClick={() => setOpen(true)}
+      style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.12em", background: "none", border: `1px dashed ${LINE}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", marginTop: 6 }} className="uppercase">
+      + What I actually did
+    </button>
+  );
+  return (
+    <div className="mt-2">
+      <textarea style={{ ...inputStyle, minHeight: 38, resize: "vertical", fontSize: 12, padding: "7px 9px" }}
+        placeholder={placeholder || "What you actually did — e.g. used dumbbells instead, 4×10 at 60 lb"}
+        value={txt} onChange={(e) => setTxt(e.target.value)}
+        onBlur={() => { onSave(txt.trim()); if (!txt.trim()) setOpen(false); }} />
+      {(value || "").trim() ? (
+        <div style={{ ...fontBody, color: GREEN, fontSize: 10, marginTop: 2 }}>Saved — goes to your coach ✓</div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- trainer-only: client intake questionnaire ---------- */
+const INTAKE_SECTIONS = [
+  ["1 · Basics", [
+    "Full name, age, and best way to reach you?",
+    "Emergency contact (name + number)?",
+  ]],
+  ["2 · Health & injuries", [
+    "Do you have a bone or joint problem that could be made worse by exercise?",
+    "Any surgeries, or anything else medical I should know about?",
+    "Any current aches, pains, or injuries — even small ones you \"just live with\"?",
+    "Any past injuries that still affect how you move (bad knee, tweaky shoulder, low back)?",
+  ]],
+  ["3 · Goals (the important part)", [
+    "What's your #1 goal in the next 3-6 months? Describe it in your own words.",
+    "Why does that goal matter to you right now? What would be different if you hit it?",
+    "Is there a date or event driving this (wedding, competition, summer, doctor's warning)?",
+  ]],
+  ["4 · Training history", [
+    "What does your exercise look like right now, in a typical week?",
+    "What have you tried before (gym, classes, sports, other trainers)?",
+    "If you stopped before — what made you stop?",
+  ]],
+  ["5 · Lifestyle", [
+    "What's your job like — desk, on your feet, physical?",
+    "How many hours of sleep do you actually get most nights?",
+    "Stress level lately, 1-10?",
+    "Describe a normal day of eating — no judgment, just the real version.",
+    "Any foods you avoid, allergies, or dietary restrictions?",
+    "Alcohol in a typical week?",
+  ]],
+  ["6 · Logistics", [
+    "How many days per week can you realistically train? Which days/times?",
+    "How long can sessions be? (30 / 45 / 60 min)",
+    "Where will you train — gym, home, both? What equipment do you have?",
+    "On a scale of 1-10, how ready are you to start right now? What would make it a 10?",
+  ]],
+];
+function downloadIntakePdf(light, preview) {
+  const st = pdfDoc("New Client Intake",
+    "pd / performance · Answer honestly — there are no wrong answers, and everything stays between us.", light);
+  INTAKE_SECTIONS.forEach(([head, qs]) => {
+    pdfLine(st, head.toUpperCase(), { red: true, bold: true, size: 12, gap: 4 });
+    qs.forEach((q) => { pdfLine(st, q, { indent: true, bullet: true, gap: 2 }); st.y += 16; });
+    st.y += 6;
+  });
+  pdfLine(st, "PHOTOS", { red: true, bold: true, size: 12, gap: 4 });
+  pdfLine(st, "Send 3 photos when you're ready — front, back, and side (phone propped up, normal lighting, snug clothing). Tracking only — nobody sees them but you and me.", { indent: true, muted: true });
+  if (preview) return st.doc.output("bloburl");
+  st.doc.save("pd-client-intake.pdf");
+}
+
+function TrainerResources() {
+  const [light, setLight] = useState(true);
+  const [prev, setPrev] = useState(null);
+  return (
+    <Card style={{ border: `1.5px dashed ${RED}` }}>
+      <div className="flex items-center justify-between">
+        <Eyebrow>Trainer only · Resources</Eyebrow>
+        <Lock size={14} color={RED} />
+      </div>
+      <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8, lineHeight: 1.55 }}>
+        Clients never see this card. Your onboarding kit: the intake questionnaire below, plus the Download PDF buttons on this tab double as program templates to send new clients.
+      </p>
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <Btn onClick={() => downloadIntakePdf(light, false)}><Download size={14} /> Intake questionnaire</Btn>
+        <Btn variant="ghost" onClick={() => setPrev(downloadIntakePdf(light, true))}>Preview</Btn>
+        <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
+          {["White", "Dark"].map((m) => {
+            const on = (m === "White") === light;
+            return (
+              <button key={m} onClick={() => setLight(m === "White")} className="uppercase"
+                style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.1em", padding: "7px 12px", border: "none", cursor: "pointer", background: on ? RED : "transparent", color: on ? "#fff" : MUTED }}>
+                {m}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {prev && <PdfPreviewOverlay url={prev} title="Intake questionnaire" onClose={() => setPrev(null)} />}
+    </Card>
+  );
+}
+
+/* ---------- grocery list, parsed from the meal plan (MyCoach-style) ---------- */
+function GroceryCard({ dietPlan }) {
+  const items = (() => {
+    const out = [];
+    (dietPlan || "").split("\n").forEach((ln) => {
+      const t = ln.trim();
+      if (!/^meal \d/i.test(t)) return;
+      const ci = t.indexOf(":");
+      if (ci < 0) return;
+      t.slice(ci + 1).replace(/\([^)]*\)/g, "").split(/,| and | with | \+ |·/).forEach((raw) => {
+        const it = raw.trim().replace(/^[-–•\s]+|[.\s]+$/g, "");
+        if (it.length > 2 && it.length < 60 && !out.some((x) => x.toLowerCase() === it.toLowerCase())) out.push(it);
+      });
+    });
+    return out.slice(0, 40);
+  })();
+  const [got, setGot] = useState({});
+  const [copied, setCopied] = useState(false);
+  if (!items.length) return null;
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <Eyebrow>Grocery list</Eyebrow>
+        <ClipboardList size={15} color={RED} />
+      </div>
+      <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 6 }}>Pulled straight from your meal plan — check items off as you shop.</p>
+      <div className="mt-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 14px" }}>
+        {items.map((it) => (
+          <button key={it} onClick={() => setGot({ ...got, [it]: !got[it] })} className="flex items-center gap-2 text-left"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "3px 0" }}>
+            <span style={{ width: 16, height: 16, borderRadius: 99, flexShrink: 0, border: `1.5px solid ${got[it] ? RED : LINE}`, background: got[it] ? RED : "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              {got[it] && <Check size={10} color="#fff" strokeWidth={3.5} />}
+            </span>
+            <span style={{ ...fontBody, color: got[it] ? MUTED : PAPER, fontSize: 12.5, textDecoration: got[it] ? "line-through" : "none" }}>{it}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-3">
+        <Btn variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(items.map((i) => `• ${i}`).join("\n")); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch {} }}>
+          {copied ? <Check size={14} color={GREEN} /> : <ClipboardList size={14} />} {copied ? "Copied" : "Copy list"}
+        </Btn>
+      </div>
+    </Card>
+  );
+}
+
+/* ---------- weekly check-in (MyCoach-style scheduled form) ---------- */
+function WeeklyCheckIn({ trainerPhone, profile }) {
+  const K = "pt-web:pt:weekly-checkin";
+  const [f, setF] = useState(() => { try { return JSON.parse(localStorage.getItem(K)) || {}; } catch { return {}; } });
+  const up = (patch) => { const n = { ...f, ...patch }; setF(n); try { localStorage.setItem(K, JSON.stringify(n)); } catch {} };
+  const selStyle = { ...inputStyle, width: "auto", padding: "8px 10px", fontSize: 12 };
+  const scale = (key, label) => (
+    <label key={key} className="flex items-center justify-between gap-2" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, padding: "8px 12px" }}>
+      <span style={{ ...fontBody, color: PAPER, fontSize: 12.5 }}>{label}</span>
+      <select style={selStyle} value={f[key] || ""} onChange={(e) => up({ [key]: e.target.value })}>
+        <option value="">—</option>
+        {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+    </label>
+  );
+  const send = () => {
+    const lines = [
+      `PD Performance weekly check-in — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+      f.weight ? `Weight: ${f.weight} lb` : null,
+      f.sleep ? `Sleep: ${f.sleep} hrs/night` : null,
+      f.energy ? `Energy: ${f.energy}/10` : null,
+      f.stress ? `Stress: ${f.stress}/10` : null,
+      f.hunger ? `Hunger: ${f.hunger}/10` : null,
+      f.soreness ? `Soreness: ${f.soreness}/10` : null,
+      f.win ? `Biggest win: ${f.win}` : null,
+      f.struggle ? `Toughest part: ${f.struggle}` : null,
+      profile.name?.trim() ? `— ${profile.name.trim()}` : null,
+    ].filter(Boolean);
+    window.location.href = `sms:${(trainerPhone || "").replace(/[^+\d]/g, "")}&body=${encodeURIComponent(lines.join("\n"))}`;
+  };
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <Eyebrow>Weekly check-in</Eyebrow>
+        <CheckSquare size={15} color={RED} />
+      </div>
+      <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 6, lineHeight: 1.5 }}>
+        Once a week — usually Sunday. Fill it out and fire it to your coach; it's how the plan gets adjusted.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <input style={inputStyle} placeholder="Weight (lb)" inputMode="decimal" value={f.weight || ""} onChange={(e) => up({ weight: e.target.value })} />
+        <input style={inputStyle} placeholder="Sleep (hrs/night)" inputMode="decimal" value={f.sleep || ""} onChange={(e) => up({ sleep: e.target.value })} />
+      </div>
+      <div className="mt-2 space-y-2">
+        {scale("energy", "Energy this week")}
+        {scale("stress", "Stress")}
+        {scale("hunger", "Hunger")}
+        {scale("soreness", "Soreness")}
+      </div>
+      <div className="mt-2 space-y-2">
+        <input style={inputStyle} placeholder="Biggest win this week" value={f.win || ""} onChange={(e) => up({ win: e.target.value })} />
+        <input style={inputStyle} placeholder="Toughest part this week" value={f.struggle || ""} onChange={(e) => up({ struggle: e.target.value })} />
+      </div>
+      <div className="mt-3">
+        <Btn onClick={send} style={{ width: "100%", justifyContent: "center" }}><MessageCircle size={14} /> Text check-in to coach</Btn>
+      </div>
+    </Card>
+  );
+}
+
+/* in-app PDF preview overlay — shows the PDF without downloading it */
+function PdfPreviewOverlay({ url, title, onClose }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.74)", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(1060px, 100%)", height: "94vh", background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div className="flex items-center justify-between gap-2" style={{ padding: "10px 14px", borderBottom: `1px solid ${LINE}`, flexShrink: 0 }}>
+          <span style={{ ...fontDisplay, color: PAPER, fontSize: 13, letterSpacing: "0.12em" }} className="uppercase">{title} — preview</span>
+          <span className="flex items-center gap-2">
+            <button onClick={() => window.open(url, "_blank")}
+              style={{ ...fontDisplay, color: PAPER, fontSize: 10, letterSpacing: "0.1em", background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer" }} className="uppercase">
+              Full screen
+            </button>
+            <button onClick={onClose} aria-label="Close preview" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <X size={15} color={PAPER} />
+            </button>
+          </span>
+        </div>
+        <iframe title="PDF preview" src={url} style={{ border: "none", width: "100%", flex: 1, background: "#525659" }} />
+      </div>
+    </div>
+  );
+}
+
+/* paste-back box: load a split or meal plan the AI built into the app */
+function AiApplyBox({ hint, onApply }) {
+  const [open, setOpen] = useState(false);
+  const [txt, setTxt] = useState("");
+  const [msg, setMsg] = useState(null);
+  return (
+    <div className="mt-4" style={{ border: `1px dashed ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 w-full"
+        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%" }}>
+        <RefreshCw size={13} color={RED} />
+        <span style={{ ...fontDisplay, color: PAPER, fontSize: 11, letterSpacing: "0.14em" }} className="uppercase">Refresh from AI</span>
+        <ChevronRight size={14} color={MUTED} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", marginLeft: "auto" }} />
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, lineHeight: 1.55 }}>{hint}</p>
+          <textarea style={{ ...inputStyle, minHeight: 96, resize: "vertical" }} placeholder="Paste the AI's result block here…"
+            value={txt} onChange={(e) => { setTxt(e.target.value); setMsg(null); }} />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Btn onClick={() => { const r = onApply(txt); setMsg(r); if (r.ok) setTxt(""); }} disabled={!txt.trim()}>
+              <RefreshCw size={14} /> Apply to app
+            </Btn>
+            {msg && <span style={{ ...fontBody, color: msg.ok ? "#3ddc84" : RED, fontSize: 12 }}>{msg.text}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* labeled photo upload slot (tap to add, shows thumbnail when filled) */
 function PhotoSlot({ label, photo, onPick, onClear, outline }) {
@@ -996,11 +1510,409 @@ function ProfileTab({ profile, setProfile, posts, setPosts }) {
 /* ====================================================================== */
 /* TAB 2 — WORKOUTS                                                       */
 /* ====================================================================== */
-function HyroxCircuit() {
+/* ---------- accountability stats ---------- */
+const pctColor = (p) => (p >= 80 ? GREEN : p >= 50 ? "#eab308" : RED);
+function StatBanner({ label, pct, caption }) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Eyebrow>{label}</Eyebrow>
+          <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 5, lineHeight: 1.45 }}>{caption}</p>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 34, color: pctColor(pct), flexShrink: 0, lineHeight: 1 }}>
+          {pct}<span style={{ fontSize: 16 }}>%</span>
+        </div>
+      </div>
+      <div style={{ height: 6, background: SURFACE2, borderRadius: 99, marginTop: 10, overflow: "hidden" }}>
+        <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: pctColor(pct), borderRadius: 99, transition: "width .3s" }} />
+      </div>
+    </Card>
+  );
+}
+
+/* day / week / month triple stat */
+function TriBanner({ label, day, week, month, caption }) {
+  const cell = (lab, p) => (
+    <div key={lab} style={{ flex: 1, textAlign: "center", background: SURFACE2, borderRadius: 10, padding: "10px 6px", border: `1px solid ${LINE}` }}>
+      <div style={{ ...fontDisplay, fontSize: 24, color: pctColor(p), lineHeight: 1 }}>{p}<span style={{ fontSize: 12 }}>%</span></div>
+      <div style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.14em", marginTop: 4 }} className="uppercase">{lab}</div>
+    </div>
+  );
+  return (
+    <Card>
+      <Eyebrow>{label}</Eyebrow>
+      <div className="flex gap-2 mt-3">{cell("Today", day)}{cell("This week", week)}{cell("This month", month)}</div>
+      {caption && <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8, marginBottom: 0 }}>{caption}</p>}
+    </Card>
+  );
+}
+
+/* expected checkable workout items for a weekday — mirrors the Train tab */
+function trainItemsFor(weekday, customSplit) {
+  if (weekday === "Sunday") return [];
+  const split = customSplit ? customSplit.days : SPLIT;
+  const today = (split || []).find((x) => x.day === weekday);
+  if (customSplit && (!today || /rest/i.test(today.focus || ""))) return [];
+  const items = ["Cardio · Warm-up"];
+  const legDay = !customSplit && (weekday === "Monday" || weekday === "Thursday");
+  if (today && today.hyrox && !customSplit) HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
+  if (today && today.exercises) today.exercises.forEach((ex) => items.push(`${weekday} · ${ex.name}`));
+  if (!legDay) items.push("Abs · Core work");
+  return items;
+}
+const last7Dates = () => [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d; });
+
+/* ---------- commitment calendar (Google-style week view) ---------- */
+const CAL_COLORS = {
+  red: { bg: "#E20429", fg: "#ffffff" },
+  pink: { bg: "#f58fb0", fg: "#2b0812" },
+  white: { bg: "#f6f4ef", fg: "#141414" },
+  grey: { bg: "#8f8f8f", fg: "#ffffff" },
+  black: { bg: "#161616", fg: "#ffffff" },
+};
+const DUR_OPTS = [["30", "30 min"], ["45", "45 min"], ["60", "1 hr"], ["90", "1.5 hr"], ["120", "2 hr"], ["180", "3 hr"]];
+function CommitCalendar({ commitments, setCommitments, events, setEvents }) {
+  const [calView, setCalView] = useState("week");
+  const [anchor, setAnchor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  const [creator, setCreator] = useState(null);
+  const [editEv, setEditEv] = useState(null);
+  const lpTimer = useRef(null);
+  const lpStart = useRef(null);
+  const now = new Date();
+  const H0 = 5, H1 = 22, PX = 44;
+  const todayKey = now.toDateString();
+  const nowY = ((now.getHours() * 60 + now.getMinutes()) - H0 * 60) / 60 * PX;
+
+  const blocksFor = (d) => {
+    const key = d.toISOString().slice(0, 10);
+    const wd = d.getDay();
+    const list = [];
+    commitments.filter((c) => c.cal?.on && c.cal.start).forEach((c) =>
+      list.push({ key: "c" + c.id, src: "commit", ref: c, text: c.text, start: c.cal.start, mins: c.cal.mins, color: c.cal.color }));
+    (events || []).forEach((e) => {
+      const show = e.repeat === "daily" || (e.repeat === "weekly" && new Date(`${e.day}T00:00`).getDay() === wd) || (e.repeat !== "daily" && e.repeat !== "weekly" && e.day === key);
+      if (show) list.push({ key: "e" + e.id + key, src: "event", ref: e, text: e.text, start: e.start, mins: e.mins, color: e.color });
+    });
+    return list;
+  };
+  const cycleCommit = (c) => {
+    const keys = Object.keys(CAL_COLORS);
+    const i = keys.indexOf(c.cal.color || "red");
+    setCommitments(commitments.map((x) => (x.id === c.id ? { ...x, cal: { ...x.cal, color: keys[(i + 1) % keys.length] } } : x)));
+  };
+  const beginPress = (d, ev) => {
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const y = ev.clientY - rect.top;
+    lpStart.current = { x: ev.clientX, y: ev.clientY };
+    clearTimeout(lpTimer.current);
+    lpTimer.current = setTimeout(() => {
+      const mins = Math.max(0, Math.round(((y / PX) * 60) / 30) * 30) + H0 * 60;
+      setCreator({ dateKey: d.toISOString().slice(0, 10), start: `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}` });
+    }, 450);
+  };
+  const cancelPress = (ev) => {
+    if (ev && ev.type === "pointermove" && lpStart.current) {
+      const dx = Math.abs(ev.clientX - lpStart.current.x), dy = Math.abs(ev.clientY - lpStart.current.y);
+      if (dx < 8 && dy < 8) return;
+    }
+    clearTimeout(lpTimer.current);
+  };
+  const shift = (n) => {
+    const d = new Date(anchor);
+    if (calView === "day") d.setDate(d.getDate() + n);
+    else if (calView === "week") d.setDate(d.getDate() + 7 * n);
+    else if (calView === "month") d.setMonth(d.getMonth() + n, 1);
+    else d.setFullYear(d.getFullYear() + n, 0, 1);
+    setAnchor(d);
+  };
+
+  const mon = new Date(anchor);
+  mon.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7));
+  const days = calView === "day" ? [new Date(anchor)] : [...Array(7)].map((_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return d; });
+  const fmtMD = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const title =
+    calView === "day" ? anchor.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    : calView === "week" ? `${fmtMD(days[0])} – ${fmtMD(days[6])}`
+    : calView === "month" ? anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : String(anchor.getFullYear());
+
+  const timeGrid = () => (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ minWidth: calView === "day" ? 0 : 660 }}>
+        <div style={{ display: "grid", gridTemplateColumns: `46px repeat(${days.length}, 1fr)`, borderBottom: `1px solid ${LINE}` }}>
+          <div />
+          {days.map((d) => {
+            const isToday = d.toDateString() === todayKey;
+            return (
+              <div key={d.toISOString()} style={{ textAlign: "center", padding: "6px 0 8px" }}>
+                <div style={{ ...fontDisplay, color: isToday ? RED : MUTED, fontSize: 10, letterSpacing: "0.14em" }} className="uppercase">{d.toLocaleDateString("en-US", { weekday: "short" })}</div>
+                <div style={{ ...fontDisplay, color: isToday ? "#fff" : PAPER, fontSize: 15, width: 28, height: 28, lineHeight: "28px", margin: "2px auto 0", borderRadius: 99, background: isToday ? RED : "transparent" }}>{d.getDate()}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: `46px repeat(${days.length}, 1fr)`, position: "relative" }}>
+          <div style={{ position: "relative", height: (H1 - H0) * PX }}>
+            {[...Array(H1 - H0)].map((_, i) => (
+              <div key={i} style={{ position: "absolute", top: i * PX - 7, right: 6, ...fontMono, color: MUTED, fontSize: 9.5 }}>
+                {i === 0 ? "" : `${(H0 + i) % 12 || 12}${H0 + i >= 12 ? "pm" : "am"}`}
+              </div>
+            ))}
+          </div>
+          {days.map((d) => {
+            const isToday = d.toDateString() === todayKey;
+            return (
+              <div key={d.toISOString()}
+                onPointerDown={(ev) => beginPress(d, ev)}
+                onPointerUp={cancelPress} onPointerLeave={cancelPress} onPointerMove={cancelPress}
+                style={{ position: "relative", height: (H1 - H0) * PX, borderLeft: `1px solid ${LINE}`, background: isToday ? "rgba(217,4,41,0.035)" : "transparent", touchAction: "manipulation", cursor: "copy" }}>
+                {[...Array(H1 - H0)].map((_, i) => (
+                  <div key={i} style={{ position: "absolute", top: i * PX, left: 0, right: 0, borderTop: `1px solid ${LINE}`, opacity: 0.55, pointerEvents: "none" }} />
+                ))}
+                {blocksFor(d).map((b) => {
+                  const [hh, mm] = b.start.split(":").map(Number);
+                  const top = ((hh * 60 + mm) - H0 * 60) / 60 * PX;
+                  const h = Math.max((parseInt(b.mins, 10) || 60) / 60 * PX, 20);
+                  const col = CAL_COLORS[b.color || "red"];
+                  const end = new Date(2000, 0, 1, hh, mm + (parseInt(b.mins, 10) || 60));
+                  return (
+                    <button key={b.key}
+                      onPointerDown={(ev) => ev.stopPropagation()}
+                      onClick={() => (b.src === "commit" ? cycleCommit(b.ref) : setEditEv(b.ref))}
+                      title={b.src === "commit" ? "Commitment — tap to change color" : "Tap to edit"}
+                      style={{ position: "absolute", top, left: 2, right: 2, height: h, background: col.bg, color: col.fg, border: (b.color || "red") === "white" ? `1px solid #c9c4ba` : "none", borderRadius: 6, padding: "3px 6px", textAlign: "left", cursor: "pointer", overflow: "hidden", zIndex: 2 }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>{b.src === "commit" ? "✓ " : ""}{b.text}</div>
+                      {h >= 34 && <div style={{ ...fontMono, fontSize: 9, opacity: 0.85 }}>{fmt12(b.start)} – {fmt12(`${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`)}</div>}
+                    </button>
+                  );
+                })}
+                {isToday && nowY > 0 && nowY < (H1 - H0) * PX && (
+                  <div style={{ position: "absolute", top: nowY, left: 0, right: 0, borderTop: `2px solid ${RED}`, zIndex: 3, pointerEvents: "none" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 99, background: RED, position: "absolute", left: -4, top: -5 }} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const monthGrid = () => {
+    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(1 - ((first.getDay() + 6) % 7));
+    const cells = [...Array(42)].map((_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+    return (
+      <div style={{ padding: "0 10px 6px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+          {["M", "T", "W", "T", "F", "S", "S"].map((w, i) => (
+            <div key={i} style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.1em", textAlign: "center", padding: "4px 0" }}>{w}</div>
+          ))}
+          {cells.map((d) => {
+            const inMonth = d.getMonth() === anchor.getMonth();
+            const isToday = d.toDateString() === todayKey;
+            const blocks = blocksFor(d).slice(0, 3);
+            return (
+              <button key={d.toISOString()} onClick={() => { setAnchor(new Date(d)); setCalView("day"); }}
+                style={{ background: "none", border: `1px solid ${LINE}`, margin: -0.5, minHeight: 56, cursor: "pointer", padding: "4px 2px", textAlign: "center", opacity: inMonth ? 1 : 0.35 }}>
+                <div style={{ ...fontDisplay, color: isToday ? "#fff" : PAPER, fontSize: 12, width: 22, height: 22, lineHeight: "22px", borderRadius: 99, margin: "0 auto", background: isToday ? RED : "transparent" }}>{d.getDate()}</div>
+                <div className="flex justify-center gap-1" style={{ marginTop: 3 }}>
+                  {blocks.map((b) => (
+                    <span key={b.key} style={{ width: 5, height: 5, borderRadius: 99, background: CAL_COLORS[b.color || "red"].bg, border: (b.color || "red") === "white" ? "1px solid #c9c4ba" : "none", display: "inline-block" }} />
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 10.5, margin: "8px 2px 4px" }}>Tap a day to open it.</p>
+      </div>
+    );
+  };
+
+  const yearGrid = () => (
+    <div style={{ padding: "0 10px 10px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+      {[...Array(12)].map((_, m) => {
+        const first = new Date(anchor.getFullYear(), m, 1);
+        const start = new Date(first);
+        start.setDate(1 - ((first.getDay() + 6) % 7));
+        return (
+          <button key={m} onClick={() => { setAnchor(first); setCalView("month"); }}
+            style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, padding: 8, cursor: "pointer", textAlign: "left" }}>
+            <div style={{ ...fontDisplay, color: RED, fontSize: 10.5, letterSpacing: "0.12em", marginBottom: 4 }} className="uppercase">
+              {first.toLocaleDateString("en-US", { month: "short" })}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+              {[...Array(42)].map((_, i) => {
+                const d = new Date(start); d.setDate(start.getDate() + i);
+                const inM = d.getMonth() === m;
+                const isToday = d.toDateString() === todayKey;
+                return (
+                  <span key={i} style={{ ...fontMono, fontSize: 7.5, textAlign: "center", lineHeight: "11px", color: isToday ? "#fff" : inM ? PAPER : "transparent", background: isToday ? RED : "transparent", borderRadius: 99 }}>
+                    {d.getDate()}
+                  </span>
+                );
+              })}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px 10px" }}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <Eyebrow>Calendar</Eyebrow>
+          <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
+            {[["day", "Day"], ["week", "Week"], ["month", "Month"], ["year", "Year"]].map(([id, lab]) => (
+              <button key={id} onClick={() => setCalView(id)} className="uppercase"
+                style={{ ...fontDisplay, fontSize: 9.5, letterSpacing: "0.09em", padding: "7px 10px", border: "none", cursor: "pointer", background: calView === id ? RED : "transparent", color: calView === id ? "#fff" : MUTED }}>
+                {lab}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between" style={{ marginTop: 10 }}>
+          <button onClick={() => shift(-1)} aria-label="Previous" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 99, width: 28, height: 28, cursor: "pointer", color: PAPER }}>‹</button>
+          <button onClick={() => { const d = new Date(); d.setHours(0, 0, 0, 0); setAnchor(d); }}
+            style={{ ...fontMono, color: PAPER, fontSize: 12, background: "none", border: "none", cursor: "pointer" }} title="Jump to today">
+            {title}
+          </button>
+          <button onClick={() => shift(1)} aria-label="Next" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 99, width: 28, height: 28, cursor: "pointer", color: PAPER }}>›</button>
+        </div>
+      </div>
+      {calView === "month" ? monthGrid() : calView === "year" ? yearGrid() : timeGrid()}
+      <p style={{ ...fontBody, color: MUTED, fontSize: 11, padding: "10px 16px 14px", margin: 0 }}>
+        {calView === "day" || calView === "week"
+          ? "Press and hold any time slot to add something — keep it as a calendar block or make it a commitment too. ✓ blocks are commitments (tap to recolor); tap an event to edit or delete."
+          : "Tap into a day for the hour-by-hour view. Press and hold there to add something."}
+      </p>
+
+      {creator && <CalQuickCreate creator={creator} onClose={() => setCreator(null)}
+        onSaveEvent={(e) => { setEvents([...(events || []), e]); setCreator(null); }}
+        onSaveCommit={(c) => { setCommitments([...commitments, c]); setCreator(null); }} />}
+      {editEv && <CalEventEdit ev={editEv} onClose={() => setEditEv(null)}
+        onSave={(patch) => { setEvents((events || []).map((x) => (x.id === editEv.id ? { ...x, ...patch } : x))); setEditEv(null); }}
+        onDelete={() => { setEvents((events || []).filter((x) => x.id !== editEv.id)); setEditEv(null); }} />}
+    </Card>
+  );
+}
+
+/* Google-style quick create — appears on press-and-hold */
+function CalQuickCreate({ creator, onClose, onSaveEvent, onSaveCommit }) {
+  const [title, setTitle] = useState("");
+  const [start, setStart] = useState(creator.start);
+  const [mins, setMins] = useState("90");
+  const [color, setColor] = useState("red");
+  const [repeat, setRepeat] = useState("once");
+  const [asCommit, setAsCommit] = useState(false);
+  const [H, M] = start.split(":").map(Number);
+  const h12 = H % 12 || 12, ap = H >= 12 ? "PM" : "AM";
+  const setT = (hh, mm, a) => setStart(`${String((hh % 12) + (a === "PM" ? 12 : 0)).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+  const selStyle = { ...inputStyle, width: "auto", padding: "7px 8px", fontSize: 12 };
+  const dateLabel = new Date(`${creator.dateKey}T00:00`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  const save = () => {
+    const text = title.trim() || "Busy";
+    if (asCommit) {
+      onSaveCommit({ id: Date.now().toString(), text, checks: [], reminder: null, cal: { on: true, start, mins, color } });
+    } else {
+      onSaveEvent({ id: Date.now().toString(), text, day: creator.dateKey, start, mins, color, repeat });
+    }
+  };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 320, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(420px, 100%)", background: SURFACE, border: `1px solid ${LINE}`, borderTop: `2px solid ${RED}`, borderRadius: 14, padding: 18 }}>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Add to calendar</Eyebrow>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, margin: "6px 0 10px" }}>{dateLabel}</p>
+        <input autoFocus style={inputStyle} placeholder="Add title — e.g. Gym session" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} />
+        <div className="flex gap-2 flex-wrap items-center mt-3">
+          <select style={selStyle} value={h12} onChange={(e) => setT(parseInt(e.target.value, 10), M, ap)}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select style={selStyle} value={M} onChange={(e) => setT(h12, parseInt(e.target.value, 10), ap)}>
+            {[0, 15, 30, 45].map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")}</option>)}
+          </select>
+          <select style={selStyle} value={ap} onChange={(e) => setT(h12, M, e.target.value)}>
+            <option>AM</option><option>PM</option>
+          </select>
+          <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>for</span>
+          <select style={selStyle} value={mins} onChange={(e) => setMins(e.target.value)}>
+            {DUR_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        {!asCommit && (
+          <div className="flex gap-2 items-center mt-3">
+            <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>Repeats</span>
+            <select style={selStyle} value={repeat} onChange={(e) => setRepeat(e.target.value)}>
+              <option value="once">Just this day</option>
+              <option value="daily">Every day</option>
+              <option value="weekly">Every week</option>
+            </select>
+          </div>
+        )}
+        <div className="flex items-center gap-1 mt-3">
+          {Object.entries(CAL_COLORS).map(([k, col]) => (
+            <button key={k} onClick={() => setColor(k)} title={k} aria-label={`Color ${k}`}
+              style={{ width: 20, height: 20, borderRadius: 99, background: col.bg, cursor: "pointer", border: color === k ? `2px solid ${PAPER}` : `1px solid ${LINE}`, boxShadow: color === k ? `0 0 0 1px ${RED}` : "none" }} />
+          ))}
+        </div>
+        <label className="flex items-center gap-2 mt-4" style={{ cursor: "pointer" }}>
+          <input type="checkbox" checked={asCommit} onChange={(e) => setAsCommit(e.target.checked)} style={{ accentColor: RED, width: 16, height: 16 }} />
+          <span style={{ ...fontBody, color: PAPER, fontSize: 12.5 }}>Also make this a commitment (daily — shows on your list with streaks)</span>
+        </label>
+        <div className="flex gap-2 mt-4">
+          <Btn onClick={save} style={{ flex: 1, justifyContent: "center" }}><Plus size={14} /> Save</Btn>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* edit / delete a calendar event */
+function CalEventEdit({ ev, onClose, onSave, onDelete }) {
+  const [title, setTitle] = useState(ev.text);
+  const [color, setColor] = useState(ev.color || "red");
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 320, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(380px, 100%)", background: SURFACE, border: `1px solid ${LINE}`, borderTop: `2px solid ${RED}`, borderRadius: 14, padding: 18 }}>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Edit event</Eyebrow>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+        </div>
+        <input style={{ ...inputStyle, marginTop: 10 }} value={title} onChange={(e) => setTitle(e.target.value)} />
+        <div className="flex items-center gap-1 mt-3">
+          {Object.entries(CAL_COLORS).map(([k, col]) => (
+            <button key={k} onClick={() => setColor(k)} aria-label={`Color ${k}`}
+              style={{ width: 20, height: 20, borderRadius: 99, background: col.bg, cursor: "pointer", border: color === k ? `2px solid ${PAPER}` : `1px solid ${LINE}`, boxShadow: color === k ? `0 0 0 1px ${RED}` : "none" }} />
+          ))}
+        </div>
+        <div className="flex gap-2 mt-4">
+          <Btn onClick={() => onSave({ text: title.trim() || ev.text, color })} style={{ flex: 1, justifyContent: "center" }}>Save</Btn>
+          <Btn variant="ghost" onClick={onDelete}><Trash2 size={14} /> Delete</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HyroxCircuit({ snaps, addSnap, isDone, toggleDone, noteGet, noteSet }) {
+  const thumbs = (label) => (snaps || []).filter((x) => x.type === "workout" && x.label === label).slice(0, 3);
   return (
     <div className="relative mt-4" style={{ paddingLeft: 26 }}>
       <div style={{ position: "absolute", left: 9, top: 8, bottom: 8, width: 2, background: `linear-gradient(${RED}, ${LINE})` }} />
-      {HYROX.map((seg, i) => (
+      {HYROX.map((seg, i) => {
+        const runLabel = `Monday · Run ${i + 1} (${seg.run})`;
+        const stLabel = `Monday · ${seg.station}`;
+        return (
         <div key={i} className="relative mb-5">
           <div className="flex items-center gap-3 mb-2">
             <div style={{ position: "absolute", left: -26, width: 20, height: 20, borderRadius: 99, background: INK, border: `2px solid ${RED}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1008,46 +1920,63 @@ function HyroxCircuit() {
             </div>
             <span style={{ ...fontDisplay, color: RED, fontSize: 12, letterSpacing: "0.2em" }} className="uppercase">Run</span>
             <span style={{ ...fontMono, color: PAPER, fontSize: 13 }}>{seg.run}</span>
+            <span className="flex items-center gap-1" style={{ marginLeft: "auto" }}>
+              {thumbs(runLabel).map((x) => <SnapThumb key={x.id} x={x} size={22} />)}
+              <TinySnap onSave={(data, vid) => addSnap("workout", data, runLabel, vid)} />
+              <DoneBox id={runLabel} isDone={isDone} toggleDone={toggleDone} />
+            </span>
           </div>
           <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, padding: "12px 14px" }}>
             <div className="flex items-center justify-between">
               <span style={{ ...fontDisplay, color: PAPER, fontSize: 16, letterSpacing: "0.04em" }} className="uppercase">{seg.station}</span>
               <span style={{ ...fontMono, color: MUTED, fontSize: 11 }}>STATION {i + 1}/4</span>
             </div>
-            <div style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 4 }}>{seg.detail}</div>
+            <div className="flex items-center justify-between gap-2" style={{ marginTop: 4 }}>
+              <div style={{ ...fontBody, color: MUTED, fontSize: 13 }}>{seg.detail}</div>
+              <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                {thumbs(stLabel).map((x) => <SnapThumb key={x.id} x={x} size={22} />)}
+                <TinySnap onSave={(data, vid) => addSnap("workout", data, stLabel, vid)} />
+                <DoneBox id={stLabel} isDone={isDone} toggleDone={toggleDone} />
+              </div>
+            </div>
+            <RowNote value={noteGet("train", stLabel)} onSave={(t) => noteSet("train", stLabel, t)} />
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel }) {
+function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet }) {
   const label = `${dayLabel} · ${ex.name}`;
   const mine = (snaps || []).filter((x) => x.type === "workout" && x.label === label).slice(0, 3);
   return (
-    <div className="flex items-center justify-between"
-      style={{ background: inSuperset ? "transparent" : SURFACE, border: inSuperset ? "none" : `1px solid ${LINE}`, borderRadius: inSuperset ? 0 : 10, padding: "10px 12px" }}>
-      <div>
-        <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
-        <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{ex.note}</div>
-        {mine.length > 0 && (
-          <div className="flex gap-1 mt-1">
-            {mine.map((x) => <SnapThumb key={x.id} x={x} />)}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-2" style={{ marginLeft: 10 }}>
-        <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap" }}>
-          {ex.sets} × {ex.reps}
+    <div style={{ background: inSuperset ? "transparent" : SURFACE, border: inSuperset ? "none" : `1px solid ${LINE}`, borderRadius: inSuperset ? 0 : 10, padding: "10px 12px" }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
+          <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{ex.note}</div>
+          {mine.length > 0 && (
+            <div className="flex gap-1 mt-1">
+              {mine.map((x) => <SnapThumb key={x.id} x={x} />)}
+            </div>
+          )}
         </div>
-        <TinySnap onSave={(data, vid) => addSnap("workout", data, label, vid)} />
+        <div className="flex items-center gap-2" style={{ marginLeft: 10 }}>
+          <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap" }}>
+            {ex.sets} × {ex.reps}
+          </div>
+          <TinySnap onSave={(data, vid) => addSnap("workout", data, label, vid)} />
+          <DoneBox id={label} isDone={isDone} toggleDone={toggleDone} />
+        </div>
       </div>
+      <RowNote value={noteGet("train", label)} onSave={(t) => noteSet("train", label, t)} />
     </div>
   );
 }
 
-function ExerciseList({ exercises, snaps, addSnap, dayLabel }) {
+function ExerciseList({ exercises, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet }) {
   const isSS = (x) => (x?.note || "").toLowerCase().includes("superset with");
   const rows = [];
   for (let i = 0; i < exercises.length; i++) {
@@ -1058,18 +1987,18 @@ function ExerciseList({ exercises, snaps, addSnap, dayLabel }) {
           <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, padding: "7px 12px 0" }}>
             <Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
           </div>
-          <ExerciseRow ex={a} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} />
+          <ExerciseRow ex={a} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
           <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
             <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
             <Link2 size={12} color={RED} />
             <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
           </div>
-          <ExerciseRow ex={b} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} />
+          <ExerciseRow ex={b} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
         </div>
       );
       i++;
     } else {
-      rows.push(<ExerciseRow key={i} ex={a} snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} />);
+      rows.push(<ExerciseRow key={i} ex={a} snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />);
     }
   }
   return <div className="mt-3 space-y-2">{rows}</div>;
@@ -1143,8 +2072,8 @@ function downloadSplitPdf(activeSplit, isCustom, light, preview) {
   pdfLine(st, "CARDIO & ABS", { red: true, bold: true, size: 12, gap: 4 });
   pdfLine(st, activeSplit[0]?.warmup ? `Warm-up cardio, every workout — ${activeSplit[0].warmup}` : "Warm-up cardio, every workout — 1 mile chill run or 15 min on the stair stepper.", { indent: true, bullet: true });
   pdfLine(st, activeSplit[0]?.abs ? `Abs — ${activeSplit[0].abs}` : "Abs every day except leg days (Monday & Thursday) — pick 2–3 core moves, 3 sets each.", { indent: true, bullet: true });
-  if (preview) window.open(st.doc.output("bloburl"), "_blank");
-  else st.doc.save("pd-workout-plan.pdf");
+  if (preview) return st.doc.output("bloburl");
+  st.doc.save("pd-workout-plan.pdf");
 }
 function downloadDietPdf(dietPlan, prefs, profile, light, preview) {
   const st = pdfDoc("Weekly Meal Plan",
@@ -1156,13 +2085,26 @@ function downloadDietPdf(dietPlan, prefs, profile, light, preview) {
     else if (/^meal \d/i.test(t)) pdfLine(st, t, { indent: true, bullet: true, gap: 3 });
     else pdfLine(st, t, { gap: 4 });
   });
-  if (preview) window.open(st.doc.output("bloburl"), "_blank");
-  else st.doc.save("pd-meal-plan.pdf");
+  if (preview) return st.doc.output("bloburl");
+  st.doc.save("pd-meal-plan.pdf");
 }
 
-function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap }) {
+function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap, isDone, toggleDone, noteGet, noteSet, doneLog }) {
+  const trainPctOver = (n) => {
+    let exp = 0, got = 0;
+    for (let i = 0; i < n; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const wd = d.toLocaleDateString("en-US", { weekday: "long" });
+      const items = trainItemsFor(wd, customSplit);
+      exp += items.length;
+      const day = (doneLog || {})[d.toISOString().slice(0, 10)] || {};
+      got += items.filter((it) => day[it]).length;
+    }
+    return exp ? Math.round((got / exp) * 100) : 0;
+  };
   const [openDay, setOpenDay] = useState(null);
   const [splitPdfLight, setSplitPdfLight] = useState(true);
+  const [splitPdfPrev, setSplitPdfPrev] = useState(null);
   const [vTitle, setVTitle] = useState("");
   const [vUrl, setVUrl] = useState("");
   const [showBuilder, setShowBuilder] = useState(false);
@@ -1203,6 +2145,8 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
 
   return (
     <div className="space-y-5">
+      <TriBanner label="Training accountability" day={trainPctOver(1)} week={trainPctOver(7)} month={trainPctOver(30)}
+        caption="Workouts checked off vs your split. 80% or higher glows green." />
       <Card style={{ position: "relative", overflow: "hidden" }}>
         <div className="flex items-center justify-between" style={{ position: "relative" }}>
           <Eyebrow>{customSplit ? "Your custom split" : "Weekly split"}</Eyebrow>
@@ -1241,7 +2185,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
               </select>
             </Field>
             <div className="flex gap-3 flex-wrap">
-              <Btn onClick={() => window.open(aiLink(profile.aiPlatform, `Build me a weekly training split: ${bDays} days per week, about ${bMins} minutes per session, main focus ${bFocus}, goal: ${profile.goal || "general fitness"}. Give exercises, sets and reps for each day.`), "_blank")}>
+              <Btn onClick={() => window.open(aiLink(profile.aiPlatform, `Act as my PD Performance coach and build me a complete weekly training split.\nRequirements: ${bDays} training days per week, about ${bMins} minutes per session, main focus: ${bFocus}, goal: ${profile.goal || "general fitness"}.\nFor every training day list the exercises in order with sets x reps, which pairs to superset (the first exercise of each session is always solo, no superset), rest times, and a one-line form cue per exercise. Include warm-up cardio before every session (1 mile easy run or 15 min stair stepper) and abs at the end of every session except leg days. Then explain in 2-3 sentences why this split fits me.\nAfter all of that, output the split one more time as a single JSON code block in exactly this shape, covering all 7 days with rest days as focus "Rest": {"summary":"why this split fits","days":[{"day":"Monday","focus":"...","notes":"one short line"}]}.\nFinish your answer by telling me to copy that JSON block, open my app at https://pdrayday.github.io/pd-performance/ on the Train tab, tap "Refresh from AI", paste it, and hit "Apply to app".`), "_blank")}>
                 <PlatformLogo s={14} /> Build my split with AI
               </Btn>
               <Btn variant="ghost" onClick={buildSplit} disabled={building}>
@@ -1270,7 +2214,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                     {d.hyrox && (
                       <span style={{ ...fontDisplay, color: RED, fontSize: 10, letterSpacing: "0.15em" }} className="uppercase">{d.tag}</span>
                     )}
-                    <ChevronRight size={16} color={MUTED} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+                    <ChevronRight size={16} color={RED} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
                   </div>
                 </div>
 
@@ -1278,11 +2222,11 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                   <div style={{ padding: "0 14px 14px", background: SURFACE2 }}>
                     {d.hyrox && !customSplit ? (
                       <>
-                        <HyroxCircuit />
-                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} />}
+                        <HyroxCircuit snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
+                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
                       </>
                     ) : d.exercises && d.exercises.length > 0 ? (
-                      <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} />
+                      <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
                     ) : (
                       <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>
                         {customSplit ? d.tag : d.day === "Sunday" ? "Full rest. Walk, stretch, sleep, hydrate — recovery is where the growth happens." : `${d.focus} session.`}
@@ -1319,6 +2263,8 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                       </div>
                     )}
 
+                    <NoteBox label="What I actually did today" placeholder="e.g. swapped squats for leg press 4×10, added 10 min incline walk — exactly what you did goes to your coach"
+                      value={noteGet("train", d.day)} onSave={(t) => noteSet("train", d.day, t)} />
                     <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px dashed ${LINE}`, paddingTop: 10 }}>
                       <PhotoPick label="Snap this workout" onPick={(p) => addSnap("workout", p, `${d.day} — ${d.focus}`)} />
                       {(snaps || []).filter((x) => x.type === "workout" && x.label === `${d.day} — ${d.focus}`).slice(0, 5).map((x) => (
@@ -1358,13 +2304,28 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
           })}
         </div>
 
+        <AiApplyBox
+          hint={`Tapped "Build my split with AI"? When the AI finishes, copy the JSON code block at the end of its answer, come back here, paste it below, and apply — your Train tab refreshes with the new split.`}
+          onApply={(raw) => {
+            try {
+              const m = raw.replace(/```json|```/g, "").match(/\{[\s\S]*\}/);
+              if (!m) return { ok: false, text: "No JSON found — copy the AI's whole JSON code block." };
+              const parsed = JSON.parse(m[0]);
+              if (!Array.isArray(parsed.days) || !parsed.days.length) return { ok: false, text: 'That JSON has no "days" list — copy the full block.' };
+              setCustomSplit(parsed);
+              setOpenDay(null);
+              return { ok: true, text: "Split loaded — your Train tab is refreshed." };
+            } catch { return { ok: false, text: "Couldn't read that — paste the complete JSON block." }; }
+          }} />
+
         <div className="mt-4 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
           <Btn onClick={() => downloadSplitPdf(activeSplit, !!customSplit, splitPdfLight, false)}>
             <Download size={14} /> Download PDF
           </Btn>
-          <Btn variant="ghost" onClick={() => downloadSplitPdf(activeSplit, !!customSplit, splitPdfLight, true)}>
+          <Btn variant="ghost" onClick={() => setSplitPdfPrev(downloadSplitPdf(activeSplit, !!customSplit, splitPdfLight, true))}>
             Preview
           </Btn>
+          {splitPdfPrev && <PdfPreviewOverlay url={splitPdfPrev} title="Workout PDF" onClose={() => setSplitPdfPrev(null)} />}
           <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
             {["White", "Dark"].map((m) => {
               const on = (m === "White") === splitPdfLight;
@@ -1388,19 +2349,41 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
         </div>
         <div className="mt-3 space-y-2">
           <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Warm-up cardio — every workout</div>
-            <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
-              {customSplit?.warmup || "1 mile chill run or 15 min on the stair stepper at the beginning of every session."}
+            <div className="flex items-center justify-between gap-2">
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Warm-up cardio — every workout</div>
+                <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
+                  1 mile chill run or 15 min on the stair stepper at the beginning of every session.
+                </div>
+              </div>
+              <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                {(snaps || []).filter((x) => x.type === "workout" && x.label === "Cardio · Warm-up").slice(0, 3).map((x) => <SnapThumb key={x.id} x={x} size={22} />)}
+                <TinySnap onSave={(data, vid) => addSnap("workout", data, "Cardio · Warm-up", vid)} />
+                <DoneBox id="Cardio · Warm-up" isDone={isDone} toggleDone={toggleDone} />
+              </div>
             </div>
+            <RowNote value={noteGet("train", "Cardio · Warm-up")} onSave={(t) => noteSet("train", "Cardio · Warm-up", t)} />
           </div>
           <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Abs — every day except leg days</div>
-            <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
-              {customSplit?.abs || "Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each."}
+            <div className="flex items-center justify-between gap-2">
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Abs — every day except leg days</div>
+                <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
+                  Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each.
+                </div>
+              </div>
+              <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                {(snaps || []).filter((x) => x.type === "workout" && x.label === "Abs · Core work").slice(0, 3).map((x) => <SnapThumb key={x.id} x={x} size={22} />)}
+                <TinySnap onSave={(data, vid) => addSnap("workout", data, "Abs · Core work", vid)} />
+                <DoneBox id="Abs · Core work" isDone={isDone} toggleDone={toggleDone} />
+              </div>
             </div>
+            <RowNote value={noteGet("train", "Abs · Core work")} onSave={(t) => noteSet("train", "Abs · Core work", t)} />
           </div>
         </div>
       </Card>
+
+      {trainerMode && <TrainerResources />}
 
     </div>
   );
@@ -1433,7 +2416,30 @@ function SnapCard({ title, type, snaps, addSnap }) {
 /* ====================================================================== */
 /* TAB 3 — DIET                                                           */
 /* ====================================================================== */
-function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snaps, addSnap }) {
+function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snaps, addSnap, isDone, toggleDone, noteGet, noteSet, doneLog, trainerMode }) {
+  const mealKeysList = (() => {
+    const keys = [];
+    (dietPlan || "").split("\n").forEach((ln) => {
+      const t = ln.trim();
+      if (/^meal \d/i.test(t)) {
+        const ci = t.indexOf(":");
+        const k = (ci > 0 ? t.slice(0, ci) : t).replace(/\s*\(.*\)/, "");
+        if (!keys.includes(k)) keys.push(k);
+      }
+    });
+    return keys;
+  })();
+  const mealPctOver = (n) => {
+    if (!mealKeysList.length) return null;
+    let exp = 0, got = 0;
+    for (let i = 0; i < n; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      exp += mealKeysList.length;
+      const day = (doneLog || {})[d.toISOString().slice(0, 10)] || {};
+      got += mealKeysList.filter((k) => day[`meal:${k}`]).length;
+    }
+    return exp ? Math.round((got / exp) * 100) : 0;
+  };
   const [prefs, setPrefs] = useState(dietPrefs);
   const [loading, setLoading] = useState(false);
   const [allergyInput, setAllergyInput] = useState("");
@@ -1454,7 +2460,9 @@ function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snap
   };
 
   const fasting = prefs.mealsPerDay === "0";
+  const [showPrefs, setShowPrefs] = useState(!dietPlan);
   const [dietPdfLight, setDietPdfLight] = useState(true);
+  const [dietPdfPrev, setDietPdfPrev] = useState(null);
   const PlatformLogo = getPlatform(profile.aiPlatform).Logo;
 
   const generate = async () => {
@@ -1485,10 +2493,27 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
   };
 
   return (
+    <>
+    {mealKeysList.length > 0 && (
+      <div style={{ marginBottom: 20 }}>
+        <TriBanner label="Nutrition accountability" day={mealPctOver(1)} week={mealPctOver(7)} month={mealPctOver(30)}
+          caption="Meals checked off vs your plan. 80% or higher glows green." />
+      </div>
+    )}
     <div className="fuel-cols">
       <div className="space-y-5">
       <Card>
-        <Eyebrow>Fuel preferences</Eyebrow>
+        <button onClick={() => setShowPrefs(!showPrefs)} className="flex items-center justify-between w-full"
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+          <Eyebrow>Fuel preferences</Eyebrow>
+          <ChevronRight size={16} color={RED} style={{ transform: showPrefs ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+        </button>
+        {!showPrefs && (
+          <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 6, marginBottom: 0 }}>
+            {prefs.dietGoal} · {fasting ? "fasting protocol" : `${prefs.mealsPerDay} meals/day`} — tap to edit or rebuild your plan.
+          </p>
+        )}
+        {showPrefs && (<>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <Field label="Diet goal">
             <select style={inputStyle} value={prefs.dietGoal} onChange={(e) => update({ dietGoal: e.target.value })}>
@@ -1539,7 +2564,7 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
         </div>
         <div className="mt-4">
           <div className="flex gap-3 flex-wrap">
-            <Btn onClick={() => window.open(aiLink(profile.aiPlatform, `Build me a weekly meal plan: goal ${prefs.dietGoal}, ${prefs.mealsPerDay} meals per day${profile.weightLb ? `, weight ${profile.weightLb} lb` : ""}. Foods I like: ${prefs.likes || "no preference"}. Avoid: ${prefs.dislikes || "none"}. Allergies: ${(prefs.allergies || []).join(", ") || "none"}. Include daily calorie and protein targets.`), "_blank")}>
+            <Btn onClick={() => window.open(aiLink(profile.aiPlatform, `Act as my PD Performance nutrition coach and build me a complete weekly meal plan.\nClient: goal ${prefs.dietGoal}, ${prefs.mealsPerDay} meals per day${profile.weightLb ? `, current weight ${profile.weightLb} lb` : ""}, trains 6 days/week (push/pull split with Hyrox-style conditioning). Foods I like: ${prefs.likes || "no preference"}. Avoid: ${prefs.dislikes || "none"}. Allergies: ${(prefs.allergies || []).join(", ") || "none"}.${prefs.schedule ? ` Schedule notes: ${prefs.schedule}.` : ""}\nGive me daily calorie, protein, fat, and carb targets with a one-line explanation of how you got them, then a meal-by-meal plan with exact foods and portions and the macros in parentheses right next to every meal, a daily total at the bottom, a hydration target of about 120 oz of water, and my carb rule: extra carbs have to be earned with cardio — run first, then eat the carbs.\nAfter all of that, output the full plan one more time as one plain-text block formatted exactly like this: section headers in ALL CAPS (DAILY TARGETS, MEAL PLAN, HYDRATION, RULES), meal lines starting with "Meal 1 —", "Meal 2 —" and so on with macros in parentheses, and a DAILY TOTAL line.\nFinish your answer by telling me to copy that text block, open my app at https://pdrayday.github.io/pd-performance/ on the Fuel tab, tap "Refresh from AI", paste it, and hit "Apply to app".`), "_blank")}>
               <PlatformLogo s={14} /> Build my plan with AI
             </Btn>
             <Btn variant="ghost" onClick={generate} disabled={loading}>
@@ -1547,7 +2572,16 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
               {loading ? "Building…" : dietPlan ? "Rebuild in app" : "Quick-build in app"}
             </Btn>
           </div>
+          <AiApplyBox
+            hint={`Tapped "Build my plan with AI"? When the AI finishes, copy the plain-text plan block at the end of its answer, come back here, paste it below, and apply — your Fuel tab refreshes with the new meal plan.`}
+            onApply={(raw) => {
+              const t = raw.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+              if (t.length < 60) return { ok: false, text: "That looks too short — paste the AI's full plan block." };
+              setDietPlan(t);
+              return { ok: true, text: "Meal plan loaded — your Fuel tab is refreshed." };
+            }} />
         </div>
+        </>)}
       </Card>
 
       </div>
@@ -1573,6 +2607,7 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
                     <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6 }}>{ci > 0 ? t.slice(ci + 1) : t}</span>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <TinySnap onSave={(data, vid) => addSnap("meal", data, mealKey, vid)} />
+                      <DoneBox id={`meal:${mealKey}`} isDone={isDone} toggleDone={toggleDone} />
                       {mealSnaps.map((x) => (
                         <div key={x.id} style={{ textAlign: "center" }}>
                           <SnapThumb x={x} size={36} />
@@ -1580,6 +2615,9 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
                         </div>
                       ))}
                     </div>
+                    <MealSwap note={noteGet("meals", mealKey)}
+                      onSave={(v) => noteSet("meals", mealKey, v)}
+                      onClear={() => noteSet("meals", mealKey, null)} />
                   </div>
                 );
               }
@@ -1590,9 +2628,10 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
             <Btn onClick={() => downloadDietPdf(dietPlan, prefs, profile, dietPdfLight, false)}>
               <Download size={14} /> Download PDF
             </Btn>
-            <Btn variant="ghost" onClick={() => downloadDietPdf(dietPlan, prefs, profile, dietPdfLight, true)}>
+            <Btn variant="ghost" onClick={() => setDietPdfPrev(downloadDietPdf(dietPlan, prefs, profile, dietPdfLight, true))}>
               Preview
             </Btn>
+            {dietPdfPrev && <PdfPreviewOverlay url={dietPdfPrev} title="Meal Plan PDF" onClose={() => setDietPdfPrev(null)} />}
             <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
               {["White", "Dark"].map((m) => {
                 const on = (m === "White") === dietPdfLight;
@@ -1619,6 +2658,9 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
       )}
       </div>
     </div>
+    {dietPlan ? <div style={{ marginTop: 20 }}><GroceryCard dietPlan={dietPlan} /></div> : null}
+    {trainerMode && <div style={{ marginTop: 20 }}><TrainerResources /></div>}
+    </>
   );
 }
 
@@ -1673,8 +2715,14 @@ function PhotoHistoryCard({ snaps, dailyLog, progress }) {
 
 const LOG_ITEMS = [["workout", "Workout"], ["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snack", "Snack"]];
 
-function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog, profile, setProfile, progress, setProgress, snaps }) {
+function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog, profile, setProfile, progress, setProgress, snaps, noteGet, noteSet, calEvents, setCalEvents, trainerPhone }) {
   const [text, setText] = useState("");
+  const [view, setView] = useState("list");
+  const [showAdd, setShowAdd] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editText, setEditText] = useState("");
+  const [delId, setDelId] = useState(null);
+  const touchX = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
   const todayLog = dailyLog[today] || {};
 
@@ -1791,7 +2839,7 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
         if (!trig) return c;
         const key = trig.toISOString().slice(0, 16);
         const dayKey = now.toISOString().slice(0, 10);
-        const withinWindow = now >= trig && now - trig < 6 * 3600e3;
+        const withinWindow = now >= trig && now - trig < 2 * 60e3;
         if (withinWindow && c.lastNotified !== key && !c.checks.includes(dayKey)) {
           try {
             if (typeof Notification !== "undefined" && Notification.permission === "granted") {
@@ -1808,63 +2856,128 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
     return () => clearInterval(iv);
   }, [commitments]);
 
-  return (
-    <div className="space-y-5">
-      {/* daily log — workout, meals, photo */}
-      <Card style={{ position: "relative", overflow: "hidden" }}>
-        <div className="flex items-center justify-between" style={{ position: "relative" }}>
-          <Eyebrow>Daily log</Eyebrow>
-          <CheckSquare size={16} color={RED} />
-        </div>
-        <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 6 }}>
-          Check off today — Yes if you did it on plan, No if you didn't. Send it to your coach every Sunday.
-        </p>
-        <div className="mt-3 space-y-2">
-          {LOG_ITEMS.map(([key, label]) => {
-            const v = todayLog[key];
-            return (
-              <div key={key} className="flex items-center justify-between" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 12px" }}>
-                <span style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{label}</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setDay({ [key]: true })} className="uppercase"
-                    style={{ ...fontDisplay, fontSize: 11, letterSpacing: "0.08em", padding: "4px 14px", borderRadius: 8, cursor: "pointer", background: v === true ? RED : "transparent", color: v === true ? PAPER : MUTED, border: `1px solid ${v === true ? RED : LINE}` }}>
-                    Yes
-                  </button>
-                  <button onClick={() => setDay({ [key]: false })} className="uppercase"
-                    style={{ ...fontDisplay, fontSize: 11, letterSpacing: "0.08em", padding: "4px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", color: v === false ? PAPER : MUTED, border: `1px solid ${v === false ? PAPER : LINE}` }}>
-                    No
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          <PhotoPick label={todayLog.photo ? "Photo ✓" : "Add today's photo"} onPick={(p) => setDay({ photo: p })} />
-          {todayLog.photo && <img src={todayLog.photo} alt="Today's check-in" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${LINE}` }} />}
-        </div>
-        <div className="mt-4" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
-          <div className="flex gap-1">
-            {[...logDays].reverse().map((k) => {
-              const l = dailyLog[k] || {};
-              const n = LOG_ITEMS.filter(([key]) => l[key] === true).length;
-              return (
-                <div key={k} style={{ flex: 1, textAlign: "center", background: SURFACE2, border: `1px solid ${n === 5 ? RED : LINE}`, borderRadius: 8, padding: "6px 2px" }}>
-                  <div style={{ ...fontMono, color: n > 0 ? PAPER : MUTED, fontSize: 11 }}>{n}/5</div>
-                  <div style={{ ...fontBody, color: MUTED, fontSize: 9 }}>{k.slice(5)}</div>
-                </div>
-              );
-            })}
-          </div>
-          <Btn onClick={sendWeek} style={{ width: "100%", justifyContent: "center", marginTop: 12 }}>Send my week to coach</Btn>
-          <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8 }}>
-            Packages your last 7 days into a message — text it to your coach with your photos attached.
-          </p>
-        </div>
-      </Card>
+  const commitPctOver = (c, n) => {
+    const age = Math.max(1, Math.ceil((Date.now() - (parseInt(c.id, 10) || Date.now())) / 864e5));
+    const den = Math.min(n, age) || 1;
+    let got = 0;
+    for (let i = 0; i < n; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      if ((c.checks || []).includes(d.toISOString().slice(0, 10))) got++;
+    }
+    return Math.round((got / den) * 100);
+  };
+  const overallOver = (n) => (commitments.length ? Math.round(commitments.reduce((a, c) => a + commitPctOver(c, n), 0) / commitments.length) : 0);
 
-      <BodyCompCard profile={profile} />
-      <WeighInsCard profile={profile} setProfile={setProfile} progress={progress} setProgress={setProgress} />
+  return (
+    <div
+      onPointerDown={(e) => { touchX.current = { x: e.clientX, y: e.clientY }; }}
+      onPointerUp={(e) => {
+        if (!touchX.current) return;
+        const dx = e.clientX - touchX.current.x;
+        const dy = Math.abs(e.clientY - touchX.current.y);
+        touchX.current = null;
+        if (dy > 60) return;
+        if (dx > 80) setView("calendar");
+        if (dx < -80) setView("list");
+      }}>
+      {/* view switch — or swipe */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
+          {[["list", "Track"], ["calendar", "Calendar"], ["photos", "Photos"]].map(([id, lab]) => (
+            <button key={id} onClick={() => setView(id)} className="uppercase"
+              style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", padding: "8px 14px", border: "none", cursor: "pointer", background: view === id ? RED : "transparent", color: view === id ? "#fff" : MUTED }}>
+              {lab}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setShowAdd(true)} aria-label="Add a commitment" title="Add a commitment"
+          style={{ background: RED, border: "none", borderRadius: 99, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, boxShadow: "0 3px 10px rgba(217,4,41,0.35)" }}>
+          <Plus size={18} color="#fff" strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {delId && (
+        <div onClick={() => setDelId(null)} style={{ position: "fixed", inset: 0, zIndex: 320, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(380px, 100%)", background: SURFACE, border: `1px solid ${LINE}`, borderTop: `2px solid ${RED}`, borderRadius: 16, padding: 18 }}>
+            <Eyebrow>Delete commitment?</Eyebrow>
+            <p style={{ ...fontBody, color: PAPER, fontSize: 13.5, marginTop: 10, lineHeight: 1.5 }}>
+              "{(commitments.find((x) => x.id === delId) || {}).text}"
+            </p>
+            <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 4 }}>
+              This also removes its streak, reminders, and calendar block. There's no undo.
+            </p>
+            <div className="flex gap-2 mt-4">
+              <Btn onClick={() => { setCommitments(commitments.filter((x) => x.id !== delId)); setDelId(null); }} style={{ flex: 1, justifyContent: "center" }}>
+                <Trash2 size={14} /> Delete
+              </Btn>
+              <Btn variant="ghost" onClick={() => setDelId(null)}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <div onClick={() => setShowAdd(false)} style={{ position: "fixed", inset: 0, zIndex: 320, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(420px, 100%)", background: SURFACE, border: `1px solid ${LINE}`, borderTop: `2px solid ${RED}`, borderRadius: 16, padding: 18 }}>
+            <div className="flex items-center justify-between">
+              <Eyebrow>Make a commitment</Eyebrow>
+              <button onClick={() => setShowAdd(false)} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+            </div>
+            <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+              Write it down, check it off daily, protect the streak. You can add reminders, calendar blocks, and edits after it's on the list.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <input autoFocus style={inputStyle} placeholder="e.g. Hit 150g protein every day" value={text} onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { add(); setShowAdd(false); } }} />
+              <Btn onClick={() => { add(); setShowAdd(false); }}><Plus size={14} /></Btn>
+            </div>
+            {notifStatus === "denied" && (
+              <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8 }}>
+                Notifications are blocked in your browser settings — allow them for this site to get reminders.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === "photos" ? (
+        <div className="space-y-5">
+          <WeighInsCard profile={profile} setProfile={setProfile} progress={progress} setProgress={setProgress} />
+          <PhotoHistoryCard snaps={snaps} dailyLog={dailyLog} progress={progress} />
+        </div>
+      ) : view === "calendar" ? (
+        <div className="space-y-5">
+          <CommitCalendar commitments={commitments} setCommitments={setCommitments} events={calEvents} setEvents={setCalEvents} />
+        </div>
+      ) : (
+    <div className="space-y-5">
+      {/* accountability stats */}
+      {commitments.length > 0 && (
+        <>
+          <TriBanner label="Commitment accountability" day={overallOver(1)} week={overallOver(7)} month={overallOver(30)}
+            caption="All commitments combined. 80% or higher glows green." />
+          <Card>
+            <Eyebrow>By commitment</Eyebrow>
+            <div className="mt-3 space-y-2">
+              {commitments.map((c) => {
+                const pw = commitPctOver(c, 7), pm = commitPctOver(c, 30);
+                return (
+                  <div key={c.id} className="flex items-center justify-between gap-3">
+                    <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.text}</span>
+                    <span className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                      <span style={{ width: 60, height: 5, background: SURFACE2, borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
+                        <span style={{ display: "block", width: `${pw}%`, height: "100%", background: pctColor(pw), borderRadius: 99 }} />
+                      </span>
+                      <span style={{ ...fontMono, fontSize: 11.5, color: pctColor(pw), width: 60, textAlign: "right" }}>wk {pw}%</span>
+                      <span style={{ ...fontMono, fontSize: 11.5, color: pctColor(pm), width: 60, textAlign: "right" }}>mo {pm}%</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </>
+      )}
 
       <Card>
         <Eyebrow>Make a commitment</Eyebrow>
@@ -1882,9 +2995,11 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
         )}
       </Card>
 
+      <WeeklyCheckIn trainerPhone={trainerPhone} profile={profile} />
+
       {commitments.length === 0 ? (
         <Card>
-          <p style={{ ...fontBody, color: MUTED, fontSize: 13 }}>No commitments yet. Add your first one above — start with something you can do every single day.</p>
+          <p style={{ ...fontBody, color: MUTED, fontSize: 13 }}>No commitments yet. Tap the red + up top to add your first one — start with something you can do every single day.</p>
         </Card>
       ) : (
         commitments.map((c) => {
@@ -1904,9 +3019,26 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
                     }}>
                     {done && <Check size={14} color={PAPER} />}
                   </button>
-                  <span style={{ ...fontBody, color: PAPER, fontSize: 14 }}>{c.text}</span>
+                  {editId === c.id ? (
+                    <input autoFocus style={{ ...inputStyle, padding: "7px 10px", fontSize: 13 }} value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && editText.trim()) { setCommitments(commitments.map((x) => x.id === c.id ? { ...x, text: editText.trim() } : x)); setEditId(null); } if (e.key === "Escape") setEditId(null); }} />
+                  ) : (
+                    <span style={{ ...fontBody, color: PAPER, fontSize: 14 }}>{c.text}</span>
+                  )}
                 </div>
-                <button onClick={() => setCommitments(commitments.filter((x) => x.id !== c.id))} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                {editId === c.id ? (
+                  <button onClick={() => { if (editText.trim()) setCommitments(commitments.map((x) => x.id === c.id ? { ...x, text: editText.trim() } : x)); setEditId(null); }}
+                    aria-label="Save commitment" style={{ background: GREEN, border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                    <Check size={15} color="#fff" strokeWidth={3} />
+                  </button>
+                ) : (
+                  <button onClick={() => { setEditId(c.id); setEditText(c.text); }} aria-label="Edit commitment" title="Edit"
+                    style={{ background: "none", border: "none", cursor: "pointer", marginRight: 2 }}>
+                    <Pencil size={14} color={RED} />
+                  </button>
+                )}
+                <button onClick={() => setDelId(c.id)} aria-label="Delete commitment" style={{ background: "none", border: "none", cursor: "pointer" }}>
                   <Trash2 size={14} color={MUTED} />
                 </button>
               </div>
@@ -1915,6 +3047,60 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
                   <Flame size={13} /> {streak(c)} day streak
                 </span>
                 <span style={{ ...fontMono, color: MUTED, fontSize: 12 }}>{last7(c)}/7 this week</span>
+              </div>
+              <div style={{ paddingLeft: 38 }}>
+                <NoteBox compact placeholder="Today's note for your coach (optional) — e.g. did 20 min instead of 30"
+                  value={noteGet("commits", c.id)} onSave={(t) => noteSet("commits", c.id, t)} />
+              </div>
+
+              {/* calendar block controls */}
+              <div style={{ paddingLeft: 38, marginTop: 10 }}>
+                <button onClick={() => setCommitments(commitments.map((x) => x.id === c.id ? { ...x, cal: { start: "09:00", mins: "90", color: "red", ...(x.cal || {}), on: !x.cal?.on } } : x))}
+                  className="flex items-center gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  <div style={{ width: 36, height: 20, borderRadius: 99, position: "relative", transition: "background .15s", background: c.cal?.on ? RED : SURFACE2, border: `1px solid ${c.cal?.on ? RED : LINE}` }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 99, background: PAPER, position: "absolute", top: 2, left: c.cal?.on ? 18 : 2, transition: "left .15s" }} />
+                  </div>
+                  <CalendarDays size={13} color={c.cal?.on ? RED : MUTED} />
+                  <span style={{ ...fontBody, color: c.cal?.on ? PAPER : MUTED, fontSize: 12 }}>
+                    {c.cal?.on ? "On the calendar" : "Block time on calendar"}
+                  </span>
+                </button>
+                {c.cal?.on && (
+                  <div className="flex gap-2 flex-wrap items-center mt-2">
+                    {(() => {
+                      const [H, M] = (c.cal.start || "09:00").split(":").map(Number);
+                      const h12 = H % 12 || 12;
+                      const ap = H >= 12 ? "PM" : "AM";
+                      const selStyle = { ...inputStyle, width: "auto", padding: "7px 8px", fontSize: 12 };
+                      const setCal = (patch) => setCommitments(commitments.map((x) => x.id === c.id ? { ...x, cal: { ...x.cal, ...patch } } : x));
+                      const setT = (hh, mm, a) => setCal({ start: `${String((hh % 12) + (a === "PM" ? 12 : 0)).padStart(2, "0")}:${String(mm).padStart(2, "0")}` });
+                      return (
+                        <>
+                          <select style={selStyle} value={h12} onChange={(e) => setT(parseInt(e.target.value, 10), M, ap)}>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                          <select style={selStyle} value={M} onChange={(e) => setT(h12, parseInt(e.target.value, 10), ap)}>
+                            {[0, 15, 30, 45].map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")}</option>)}
+                          </select>
+                          <select style={selStyle} value={ap} onChange={(e) => setT(h12, M, e.target.value)}>
+                            <option>AM</option>
+                            <option>PM</option>
+                          </select>
+                          <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>for</span>
+                          <select style={selStyle} value={c.cal.mins || "90"} onChange={(e) => setCal({ mins: e.target.value })}>
+                            {DUR_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                          <span className="flex items-center gap-1">
+                            {Object.entries(CAL_COLORS).map(([k, col]) => (
+                              <button key={k} onClick={() => setCal({ color: k })} title={k} aria-label={`Color ${k}`}
+                                style={{ width: 18, height: 18, borderRadius: 99, background: col.bg, cursor: "pointer", border: (c.cal.color || "red") === k ? `2px solid ${PAPER}` : `1px solid ${LINE}`, boxShadow: (c.cal.color || "red") === k ? `0 0 0 1px ${RED}` : "none" }} />
+                            ))}
+                          </span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* reminder controls */}
@@ -1985,7 +3171,8 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
         })
       )}
 
-      <PhotoHistoryCard snaps={snaps} dailyLog={dailyLog} progress={progress} />
+    </div>
+      )}
     </div>
   );
 }
@@ -2000,6 +3187,13 @@ const FEED_TOPICS = {
   Bodybuilding: [
     { v: "si2vi517BH4", t: "2026 Mr. Olympia Finals and Recap: Nick Walker wins", c: "Nick's Strength and Power" },
     { v: "roHQ3F7d9YQ", t: "How To Get Lean & STAY Lean Forever (Using Science)", c: "Jeff Nippard" },
+  ],
+  Nutrition: [
+    { v: "Pok0Jg2JAkE", t: "The Smartest Way To Use Protein To Build Muscle (Science Explained)", c: "Jeff Nippard" },
+    { v: "osqvOUJjaCo", t: "The Best Meal Plan To Build Muscle Faster (EAT LIKE THIS!)", c: "Jeremy Ethier" },
+    { v: "YOPs3zUIMwU", t: "Beginner's Meal Prep Guide — All Calories & Macros", c: "Buff Dudes" },
+    { t: "Examine — independent research on supplements & nutrition", d: "Evidence-based answers before you buy anything", u: "https://examine.com" },
+    { t: "Precision Nutrition macro calculator", d: "Free calorie & macro targets for any goal", u: "https://www.precisionnutrition.com/nutrition-calculator" },
   ],
   Hyrox: [
     { v: "Qu_rcoH5ieA", t: "HYROX Pro Explains Mistakes to Avoid for Every Station", c: "Rich Ryan" },
@@ -2020,7 +3214,258 @@ const FEED_TOPICS = {
   ],
 };
 
-function GroupsTab({ profile, posts, setPosts, interests, setInterests }) {
+/* ---------- iMessage-style chats ---------- */
+const TAPBACKS = ["❤️", "👍", "👎", "😂", "‼️", "❓"];
+const chatTime = (ts) => new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+function ChatAvatar({ name, size = 40 }) {
+  return (
+    <div style={{ width: size, height: size, borderRadius: 99, background: SURFACE2, border: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <span style={{ ...fontDisplay, color: RED, fontSize: size * 0.42 }}>{(name || "?").trim()[0]?.toUpperCase() || "?"}</span>
+    </div>
+  );
+}
+
+function ChatMediaBtn({ onPick }) {
+  const ref = useRef(null);
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*,video/*" style={{ display: "none" }}
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          try {
+            if (f.type.startsWith("video/")) {
+              if (f.size > 1500000) alert("That video is too big to attach — keep clips under ~10 seconds.");
+              else { const r = new FileReader(); r.onload = () => onPick(r.result, true); r.readAsDataURL(f); }
+            } else onPick(await compressImage(f, 700, 0.7), false);
+          } catch { alert("Couldn't read that file."); }
+          e.target.value = "";
+        }} />
+      <button onClick={() => ref.current?.click()} aria-label="Attach a photo or video"
+        style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 99, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+        <Camera size={16} color={RED} />
+      </button>
+    </>
+  );
+}
+
+function ChatsPane({ profile, chats, setChats, registered }) {
+  const me = profile.name?.trim() || "Me";
+  const [activeId, setActiveId] = useState(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [reactFor, setReactFor] = useState(null);
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState([]);
+  const [gname, setGname] = useState("");
+  const endRef = useRef(null);
+  const active = (chats || []).find((c) => c.id === activeId);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest" }); }, [activeId, (active?.msgs || []).length]);
+
+  const updateChat = (id, fn) => setChats((chats || []).map((c) => (c.id === id ? fn(c) : c)));
+  const sendMsg = (payload) => {
+    if (!active) return;
+    const msg = { id: Date.now().toString(), from: "me", ts: Date.now(), reacts: {}, ...payload };
+    updateChat(active.id, (c) => ({ ...c, msgs: [...(c.msgs || []), msg].slice(-200) }));
+  };
+  const toggleReact = (msgId, emoji) => {
+    updateChat(active.id, (c) => ({
+      ...c,
+      msgs: c.msgs.map((m) => {
+        if (m.id !== msgId) return m;
+        const r = { ...(m.reacts || {}) };
+        const who = new Set(r[emoji] || []);
+        who.has(me) ? who.delete(me) : who.add(me);
+        r[emoji] = [...who];
+        if (!r[emoji].length) delete r[emoji];
+        return { ...m, reacts: r };
+      }),
+    }));
+    setReactFor(null);
+  };
+  const people = registered.filter((n) => n.toLowerCase().includes(q.trim().toLowerCase()));
+  const startChat = () => {
+    if (!picked.length) return;
+    const name = picked.length === 1 ? picked[0] : (gname.trim() || picked.slice(0, 3).join(", "));
+    const existing = (chats || []).find((c) => c.members.join("|") === picked.join("|"));
+    if (existing) { setActiveId(existing.id); }
+    else {
+      const c = { id: Date.now().toString(), name, members: picked, msgs: [] };
+      setChats([c, ...(chats || [])]);
+      setActiveId(c.id);
+    }
+    setComposeOpen(false); setPicked([]); setGname(""); setQ("");
+  };
+
+  /* ---- new chat screen ---- */
+  if (composeOpen) return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <Eyebrow>New message</Eyebrow>
+        <button onClick={() => setComposeOpen(false)} aria-label="Cancel" style={{ background: "none", border: "none", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+      </div>
+      <input style={{ ...inputStyle, marginTop: 10 }} placeholder="Search people in the program…" value={q} onChange={(e) => setQ(e.target.value)} />
+      {picked.length > 1 && (
+        <input style={{ ...inputStyle, marginTop: 8 }} placeholder="Group name (optional)" value={gname} onChange={(e) => setGname(e.target.value)} />
+      )}
+      <div className="mt-3 space-y-1" style={{ maxHeight: 260, overflowY: "auto" }}>
+        {people.map((n) => {
+          const on = picked.includes(n);
+          return (
+            <button key={n} onClick={() => setPicked(on ? picked.filter((x) => x !== n) : [...picked, n])}
+              className="flex items-center gap-3 w-full" style={{ background: on ? "rgba(217,4,41,0.1)" : "none", border: "none", borderRadius: 12, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>
+              <ChatAvatar name={n} size={34} />
+              <span style={{ ...fontBody, color: PAPER, fontSize: 13.5, flex: 1 }}>{n}</span>
+              <span style={{ width: 20, height: 20, borderRadius: 99, border: `1.5px solid ${on ? RED : LINE}`, background: on ? RED : "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                {on && <Check size={12} color="#fff" strokeWidth={3} />}
+              </span>
+            </button>
+          );
+        })}
+        {q.trim() && !people.some((n) => n.toLowerCase() === q.trim().toLowerCase()) && (
+          <button onClick={() => { setPicked([...picked, q.trim()]); setQ(""); }}
+            className="flex items-center gap-3 w-full" style={{ background: "none", border: `1px dashed ${LINE}`, borderRadius: 12, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>
+            <Plus size={16} color={RED} />
+            <span style={{ ...fontBody, color: PAPER, fontSize: 13 }}>Add "{q.trim()}"</span>
+          </button>
+        )}
+        {!people.length && !q.trim() && (
+          <p style={{ ...fontBody, color: MUTED, fontSize: 12, padding: "6px 2px" }}>
+            Nobody here yet — people show up as they register and post. You can also type any name to add them.
+          </p>
+        )}
+      </div>
+      {picked.length > 0 && (
+        <div className="flex gap-1 mt-2 flex-wrap">
+          {picked.map((n) => (
+            <span key={n} style={{ ...fontBody, background: SURFACE2, border: `1px solid ${LINE}`, color: PAPER, fontSize: 11.5, borderRadius: 99, padding: "3px 10px" }}>{n}</span>
+          ))}
+        </div>
+      )}
+      <div className="mt-3">
+        <Btn onClick={startChat} disabled={!picked.length} style={{ width: "100%", justifyContent: "center" }}>
+          <MessageCircle size={14} /> {picked.length > 1 ? "Start group chat" : "Start chat"}
+        </Btn>
+      </div>
+    </Card>
+  );
+
+  /* ---- conversation screen ---- */
+  if (active) return (
+    <Card style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", height: "min(66vh, 620px)" }}>
+      <div className="flex items-center gap-3" style={{ padding: "10px 14px", borderBottom: `1px solid ${LINE}`, flexShrink: 0 }}>
+        <button onClick={() => setActiveId(null)} aria-label="Back to chats" style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}>
+          <ChevronRight size={18} color={RED} style={{ transform: "rotate(180deg)" }} />
+        </button>
+        <ChatAvatar name={active.name} size={32} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, color: PAPER, fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active.name}</div>
+          <div style={{ ...fontBody, color: MUTED, fontSize: 10.5 }}>{active.members.length} {active.members.length === 1 ? "person" : "people"}</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px 6px" }} onClick={() => setReactFor(null)}>
+        {(active.msgs || []).length === 0 && (
+          <p style={{ ...fontBody, color: MUTED, fontSize: 12, textAlign: "center", marginTop: 24 }}>
+            Say something — tap and hold the camera-free zone… just kidding, type below. Tap a bubble to react.
+          </p>
+        )}
+        {(active.msgs || []).map((m) => {
+          const mine = m.from === "me";
+          const reacts = Object.entries(m.reacts || {}).filter(([, who]) => who.length);
+          return (
+            <div key={m.id} className="flex" style={{ justifyContent: mine ? "flex-end" : "flex-start", marginBottom: reacts.length ? 18 : 8 }}>
+              <div style={{ maxWidth: "78%", position: "relative" }}>
+                {!mine && <div style={{ ...fontBody, color: MUTED, fontSize: 10, margin: "0 0 2px 10px" }}>{m.from}</div>}
+                <button onClick={(e) => { e.stopPropagation(); setReactFor(reactFor === m.id ? null : m.id); }}
+                  style={{ display: "block", textAlign: "left", width: "100%", background: mine ? RED : SURFACE2, color: mine ? "#fff" : PAPER, border: "none", borderRadius: 18, padding: m.photo ? 4 : "9px 13px", cursor: "pointer" }}>
+                  {m.photo && (m.video
+                    ? <video src={m.photo} controls playsInline style={{ maxWidth: "100%", borderRadius: 15, display: "block" }} />
+                    : <img src={m.photo} alt="attachment" style={{ maxWidth: "100%", borderRadius: 15, display: "block" }} />)}
+                  {m.text && <div style={{ ...fontBody, fontSize: 14, lineHeight: 1.45, whiteSpace: "pre-wrap", padding: m.photo ? "7px 9px 5px" : 0 }}>{m.text}</div>}
+                </button>
+                <div style={{ ...fontBody, color: MUTED, fontSize: 9, textAlign: mine ? "right" : "left", margin: "2px 6px 0" }}>{chatTime(m.ts)}</div>
+                {reacts.length > 0 && (
+                  <div style={{ position: "absolute", bottom: -12, [mine ? "left" : "right"]: 4, display: "flex", gap: 2 }}>
+                    {reacts.map(([e, who]) => (
+                      <span key={e} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 99, padding: "1px 6px", fontSize: 11 }}>{e}{who.length > 1 ? ` ${who.length}` : ""}</span>
+                    ))}
+                  </div>
+                )}
+                {reactFor === m.id && (
+                  <div onClick={(e) => e.stopPropagation()}
+                    style={{ position: "absolute", top: -38, [mine ? "right" : "left"]: 0, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 99, padding: "5px 8px", display: "flex", gap: 6, zIndex: 5, boxShadow: "0 6px 18px rgba(0,0,0,0.35)" }}>
+                    {TAPBACKS.map((e) => (
+                      <button key={e} onClick={() => toggleReact(m.id, e)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 0 }}>{e}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+      <div className="flex items-center gap-2" style={{ padding: "10px 12px", borderTop: `1px solid ${LINE}`, flexShrink: 0 }}>
+        <ChatMediaBtn onPick={(data, vid) => sendMsg({ photo: data, video: vid })} />
+        <input style={{ ...inputStyle, borderRadius: 99, flex: 1 }} placeholder="iMessage-style… type here" value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { sendMsg({ text: draft.trim() }); setDraft(""); } }} />
+        <button onClick={() => { if (draft.trim()) { sendMsg({ text: draft.trim() }); setDraft(""); } }} aria-label="Send"
+          style={{ background: draft.trim() ? RED : SURFACE2, border: "none", borderRadius: 99, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}>
+          <Send size={15} color={draft.trim() ? "#fff" : MUTED} style={{ marginLeft: -2, marginTop: 1 }} />
+        </button>
+      </div>
+    </Card>
+  );
+
+  /* ---- chat list ---- */
+  return (
+    <div className="space-y-4">
+      <div style={{ background: "rgba(217,4,41,0.08)", border: `1px dashed rgba(217,4,41,0.4)`, borderRadius: 12, padding: "9px 12px", ...fontBody, color: MUTED, fontSize: 11, lineHeight: 1.5 }}>
+        Heads up: until accounts launch, messages save on this device only — the other person sees them when real accounts arrive. The full experience is ready and waiting.
+      </div>
+      <Card style={{ padding: 14 }}>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Messages</Eyebrow>
+          <button onClick={() => setComposeOpen(true)} aria-label="New message" title="New message"
+            style={{ background: RED, border: "none", borderRadius: 99, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 3px 10px rgba(217,4,41,0.35)" }}>
+            <Pencil size={14} color="#fff" />
+          </button>
+        </div>
+        {(chats || []).length === 0 ? (
+          <p style={{ ...fontBody, color: MUTED, fontSize: 12.5, marginTop: 12 }}>
+            No conversations yet. Tap the red pencil to start a chat or group chat — search people in the program, or type any name.
+          </p>
+        ) : (
+          <div className="mt-2">
+            {(chats || []).map((c) => {
+              const last = (c.msgs || [])[c.msgs.length - 1];
+              return (
+                <button key={c.id} onClick={() => setActiveId(c.id)} className="flex items-center gap-3 w-full"
+                  style={{ background: "none", border: "none", borderBottom: `1px solid ${LINE}`, padding: "11px 2px", cursor: "pointer", textAlign: "left" }}>
+                  <ChatAvatar name={c.name} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="flex items-center justify-between">
+                      <span style={{ ...fontBody, color: PAPER, fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                      {last && <span style={{ ...fontBody, color: MUTED, fontSize: 10.5, flexShrink: 0, marginLeft: 8 }}>{chatTime(last.ts)}</span>}
+                    </div>
+                    <div style={{ ...fontBody, color: MUTED, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
+                      {last ? (last.text || (last.video ? "Video" : "Photo")) : `${c.members.length} ${c.members.length === 1 ? "person" : "people"}`}
+                    </div>
+                  </div>
+                  <ChevronRight size={15} color={RED} style={{ flexShrink: 0 }} />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function GroupsTab({ profile, posts, setPosts, interests, setInterests, chats, setChats, registered, gview, setGview }) {
   const like = (id) => setPosts(posts.map((p) => (p.id === id ? { ...p, likes: (p.likes || 0) + 1 } : p)));
   const [drafts, setDrafts] = useState({});
   const comment = (id) => {
@@ -2050,6 +3495,19 @@ function GroupsTab({ profile, posts, setPosts, interests, setInterests }) {
 
   return (
     <div className="space-y-5">
+      <div className="flex" style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden", width: "fit-content" }}>
+        {[["feed", "Feed"], ["chats", "Chats"]].map(([id, lab]) => (
+          <button key={id} onClick={() => setGview(id)} className="uppercase"
+            style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", padding: "8px 18px", border: "none", cursor: "pointer", background: gview === id ? RED : "transparent", color: gview === id ? "#fff" : MUTED }}>
+            {lab}
+          </button>
+        ))}
+      </div>
+
+      {gview === "chats" ? (
+        <ChatsPane profile={profile} chats={chats} setChats={setChats} registered={registered} />
+      ) : (
+      <>
       {/* for-you feed */}
       <Card>
         <div className="flex items-center justify-between">
@@ -2156,6 +3614,8 @@ function GroupsTab({ profile, posts, setPosts, interests, setInterests }) {
           </Card>
         ))
       )}
+      </>
+      )}
     </div>
   );
 }
@@ -2250,6 +3710,9 @@ Answer questions and give recommendations tied to their goals. Be direct, encour
 /* ====================================================================== */
 function TrainerPanel({ trainerCfg, setTrainerCfg, onClose, bookings }) {
   const [venmo, setVenmo] = useState(trainerCfg.venmo || "");
+  const [phone, setPhone] = useState(trainerCfg.phone || "");
+  const [cName, setCName] = useState("");
+  const [cPin, setCPin] = useState("");
   const [stripe, setStripe] = useState(trainerCfg.stripe || "");
   const [calendar, setCalendar] = useState(trainerCfg.calendar || "");
   const [pin, setPin] = useState("");
@@ -2260,6 +3723,9 @@ function TrainerPanel({ trainerCfg, setTrainerCfg, onClose, bookings }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: SURFACE, borderTop: `2px solid ${RED}`, borderRadius: "18px 18px 0 0", padding: 20, width: "100%", maxWidth: 560, maxHeight: "85vh", overflowY: "auto" }}>
         <Eyebrow>Trainer settings</Eyebrow>
         <div className="space-y-3 mt-4">
+          <Field label="Your cell number (clients text their daily check-ins here)">
+            <input style={inputStyle} placeholder="e.g. +1 555 123 4567" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
+          </Field>
           <Field label="Your Venmo username (clients pay you here)">
             <input style={inputStyle} placeholder="e.g. payton-trainer" value={venmo} onChange={(e) => setVenmo(e.target.value)} />
           </Field>
@@ -2268,6 +3734,35 @@ function TrainerPanel({ trainerCfg, setTrainerCfg, onClose, bookings }) {
           </Field>
           <Field label="Booking calendar link (Calendly, Google appointments, etc.)">
             <input style={inputStyle} placeholder="https://calendly.com/…" value={calendar} onChange={(e) => setCalendar(e.target.value)} />
+          </Field>
+          <Field label="Client PINs (each client signs in with theirs to open their own private space)">
+            <div className="space-y-1" style={{ marginBottom: 8 }}>
+              {[...DEFAULT_CLIENTS, ...(trainerCfg.clients || [])].map((c, i) => (
+                <div key={c.pin} className="flex items-center justify-between" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "7px 12px" }}>
+                  <span style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{c.name}</span>
+                  <span className="flex items-center gap-2">
+                    <span style={{ ...fontMono, color: RED, fontSize: 13, letterSpacing: "0.15em" }}>{c.pin}</span>
+                    {i >= DEFAULT_CLIENTS.length && (
+                      <button onClick={() => setTrainerCfg({ ...trainerCfg, clients: (trainerCfg.clients || []).filter((x) => x.pin !== c.pin) })}
+                        aria-label={`Remove ${c.name}`} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                        <Trash2 size={13} color={MUTED} />
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input style={{ ...inputStyle, flex: 2 }} placeholder="Client name" value={cName} onChange={(e) => setCName(e.target.value)} />
+              <input style={{ ...inputStyle, flex: 1 }} placeholder="4-digit PIN" inputMode="numeric" maxLength={4} value={cPin} onChange={(e) => setCPin(e.target.value.replace(/\D/g, ""))} />
+              <Btn variant="ghost" onClick={() => {
+                if (!cName.trim() || cPin.length !== 4) return;
+                const taken = [...DEFAULT_CLIENTS, ...(trainerCfg.clients || [])].some((x) => x.pin === cPin) || cPin === (trainerCfg.pin || "4343");
+                if (taken) { alert("That PIN is taken — pick another."); return; }
+                setTrainerCfg({ ...trainerCfg, clients: [...(trainerCfg.clients || []), { name: cName.trim(), pin: cPin }] });
+                setCName(""); setCPin("");
+              }}><Plus size={14} /></Btn>
+            </div>
           </Field>
           <Field label="Change trainer PIN (optional)">
             <input style={inputStyle} placeholder="New 4-digit PIN" value={pin} onChange={(e) => setPin(e.target.value)} inputMode="numeric" />
@@ -2296,7 +3791,7 @@ function TrainerPanel({ trainerCfg, setTrainerCfg, onClose, bookings }) {
         </div>
 
         <div className="flex gap-3 mt-5">
-          <Btn onClick={() => { setTrainerCfg({ ...trainerCfg, venmo: venmo.trim(), stripe: stripe.trim(), calendar: calendar.trim(), ...(pin.trim() ? { pin: pin.trim() } : {}) }); onClose(); }}>
+          <Btn onClick={() => { setTrainerCfg({ ...trainerCfg, venmo: venmo.trim(), stripe: stripe.trim(), calendar: calendar.trim(), phone: phone.trim(), ...(pin.trim() ? { pin: pin.trim() } : {}) }); onClose(); }}>
             Save settings
           </Btn>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
@@ -2343,7 +3838,9 @@ const PREVIEW_FRAMES = [
   },
 ];
 
-function LoginGate({ onLogin }) {
+function LoginGate({ onLogin, onPin }) {
+  const [pin, setPin] = useState("");
+  const [pinErr, setPinErr] = useState(false);
   const [i, setI] = useState(0);
   useEffect(() => {
     const iv = setInterval(() => setI((x) => (x + 1) % PREVIEW_FRAMES.length), 3200);
@@ -2401,6 +3898,22 @@ function LoginGate({ onLogin }) {
             style={{ ...fontBody, background: PAPER, color: INK, border: `1px solid ${PAPER}`, borderRadius: 12, padding: "12px 16px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
             <AppleLogo s={18} /> Continue with Apple
           </button>
+          <div className="flex items-center gap-2" style={{ marginTop: 4 }}>
+            <div style={{ flex: 1, height: 1, background: LINE }} />
+            <span style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.16em" }} className="uppercase">or client sign-in</span>
+            <div style={{ flex: 1, height: 1, background: LINE }} />
+          </div>
+          <div className="flex gap-2">
+            <input inputMode="numeric" maxLength={4} placeholder="Your personal PIN" value={pin}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setPinErr(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && pin.length === 4) { if (!onPin(pin)) setPinErr(true); } }}
+              style={{ ...fontBody, flex: 1, background: SURFACE2, border: `1px solid ${pinErr ? RED : LINE}`, borderRadius: 12, padding: "12px 16px", fontSize: 15, color: PAPER, letterSpacing: "0.3em", textAlign: "center", outline: "none" }} />
+            <button onClick={() => { if (pin.length === 4 && !onPin(pin)) setPinErr(true); }}
+              style={{ ...fontDisplay, background: RED, color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 12, letterSpacing: "0.1em", cursor: "pointer" }} className="uppercase">
+              Enter
+            </button>
+          </div>
+          {pinErr && <p style={{ ...fontBody, color: RED, fontSize: 11.5, margin: 0 }}>PIN not recognized — ask your trainer for your personal PIN.</p>}
           <button onClick={() => onLogin("guest")}
             className="w-full"
             style={{ ...fontBody, background: "none", color: MUTED, border: "none", fontSize: 13, cursor: "pointer", padding: 6 }}>
@@ -2635,26 +4148,32 @@ export default function App() {
   const [progress, setProgressState] = useState([]);
   const [posts, setPostsState] = useState([]);
   const [bookings, setBookingsState] = useState([]);
-  const [trainerCfg, setTrainerCfgState] = useState({ venmo: "", stripe: "", pin: "", calendar: "" });
+  const [trainerCfg, setTrainerCfgState] = useState({ venmo: "", stripe: "", pin: "4343", calendar: "" });
   const [trainerMode, setTrainerMode] = useState(false);
   const [showTrainerPanel, setShowTrainerPanel] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setThemeState] = useState("dark");
   const [session, setSessionState] = useState(null);
   const [dailyLog, setDailyLogState] = useState({});
   const [snaps, setSnapsState] = useState([]);
   const [interests, setInterestsState] = useState(null);
+  const [doneLog, setDoneLogState] = useState({});
+  const [dayNotes, setDayNotesState] = useState({});
+  const [calEvents, setCalEventsState] = useState([]);
+  const [chats, setChatsState] = useState([]);
+  const [gview, setGview] = useState("feed");
 
   useEffect(() => {
     (async () => {
-      const [p, pl, dp, dpl, cm, vd, cs, pg, ps, tc, bk, th, se, dl, sn, it] = await Promise.all([
+      const [p, pl, dp, dpl, cm, vd, cs, pg, ps, tc, bk, th, se, dl, sn, it, dn, dnn, ce, ch] = await Promise.all([
         sget("pt:profile"), sget("pt:plan"), sget("pt:diet-prefs"), sget("pt:diet-plan"),
         sget("pt:commitments"), sget("pt:videos", true), sget("pt:custom-split"),
         sget("pt:progress"), sget("pt:group-posts", true), sget("pt:trainer-cfg", true),
         sget("pt:bookings", true), sget("pt:theme"), sget("pt:session"), sget("pt:daily-log"),
-        sget("pt:snaps"), sget("pt:interests"),
+        sget("pt:snaps"), sget("pt:interests"), sget("pt:done-log"), sget("pt:day-notes"), sget("pt:cal-events"), sget("pt:chats", true),
       ]);
       if (p) setProfileState(p);
       if (pl) setPlanState(pl);
@@ -2672,6 +4191,10 @@ export default function App() {
       if (dl) setDailyLogState(dl);
       if (sn) setSnapsState(sn);
       if (it) setInterestsState(it);
+      if (dn) setDoneLogState(dn);
+      if (dnn) setDayNotesState(dnn);
+      if (ce) setCalEventsState(ce);
+      if (ch) setChatsState(ch);
       setLoaded(true);
     })();
   }, []);
@@ -2692,6 +4215,142 @@ export default function App() {
   const setDailyLog = (v) => { setDailyLogState(v); sset("pt:daily-log", v); };
   const setSnaps = (v) => { setSnapsState(v); sset("pt:snaps", v); };
   const setInterests = (v) => { setInterestsState(v); sset("pt:interests", v); };
+  const setDoneLog = (v) => { setDoneLogState(v); sset("pt:done-log", v); };
+  const setDayNotes = (v) => { setDayNotesState(v); sset("pt:day-notes", v); };
+  const setCalEvents = (v) => { setCalEventsState(v); sset("pt:cal-events", v); };
+  const setChats = (v) => { setChatsState(v); sset("pt:chats", v, true); };
+  const registeredPeople = [...new Set([...(posts || []).map((p) => p.author), "PD Coach (Payton)"])].filter((n) => n && n !== (profile.name || "").trim());
+  const noteGet = (kind, key) => ((dayNotes[new Date().toISOString().slice(0, 10)] || {})[kind] || {})[key];
+  const noteSet = (kind, key, val) => {
+    const d = new Date().toISOString().slice(0, 10);
+    const day = { ...(dayNotes[d] || {}) };
+    const k = { ...(day[kind] || {}) };
+    const empty = val == null || val === "" || (typeof val === "object" && !(val.text || "").trim());
+    if (empty) delete k[key]; else k[key] = val;
+    day[kind] = k;
+    setDayNotes({ ...dayNotes, [d]: day });
+  };
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const isDone = (id) => !!(doneLog[todayISO()] || {})[id];
+  const toggleDone = (id) => {
+    const d = todayISO();
+    const day = { ...(doneLog[d] || {}) };
+    if (day[id]) delete day[id]; else day[id] = true;
+    setDoneLog({ ...doneLog, [d]: day });
+  };
+
+  /* text-my-coach checklist built from today's checkmarks */
+  const buildCheckin = () => {
+    const now = new Date();
+    const dateKey = now.toISOString().slice(0, 10);
+    const done = doneLog[dateKey] || {};
+    const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+    const split = customSplit ? customSplit.days : SPLIT;
+    const today = (split || []).find((x) => x.day === weekday);
+    const lines = [`PD Performance check-in — ${weekday}, ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, ""];
+    const items = [];
+    const legDay = !customSplit && (weekday === "Monday" || weekday === "Thursday");
+    items.push("Cardio · Warm-up");
+    if (today && today.hyrox && !customSplit) {
+      HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
+    }
+    if (today && today.exercises) today.exercises.forEach((ex) => items.push(`${weekday} · ${ex.name}`));
+    if (!legDay) items.push("Abs · Core work");
+    const wDone = items.filter((i) => done[i]).length;
+    const notes0 = dayNotes[dateKey] || {};
+    lines.push(`WORKOUT${today ? ` — ${today.focus}` : ""} (${wDone}/${items.length})`);
+    items.forEach((i) => {
+      lines.push(`${done[i] ? "✅" : "⬜️"} ${i.replace(`${weekday} · `, "")}`);
+      const n = (notes0.train || {})[i];
+      if (n) lines.push(`   ↳ actually did: ${n}`);
+    });
+    const tNote = (notes0.train || {})[weekday];
+    if (tNote) lines.push(`📝 Session notes: ${tNote}`);
+    const notes = dayNotes[dateKey] || {};
+    const mealKeys = [];
+    (dietPlan || "").split("\n").forEach((ln) => {
+      const t = ln.trim();
+      if (/^meal \d/i.test(t)) {
+        const ci = t.indexOf(":");
+        const k = (ci > 0 ? t.slice(0, ci) : t).replace(/\s*\(.*\)/, "");
+        if (!mealKeys.includes(k)) mealKeys.push(k);
+      }
+    });
+    if (mealKeys.length) {
+      const mDone = mealKeys.filter((m) => done[`meal:${m}`]).length;
+      lines.push("", `MEALS (${mDone}/${mealKeys.length})`);
+      mealKeys.forEach((m) => {
+        lines.push(`${done[`meal:${m}`] ? "✅" : "⬜️"} ${m}`);
+        const sw = (notes.meals || {})[m];
+        if (sw) lines.push(`   ↳ ate instead: ${sw.text} (≈${sw.cal} cal · ${sw.p}P/${sw.f}F/${sw.c}C est.)`);
+      });
+      const swaps = Object.values(notes.meals || {});
+      if (swaps.length) {
+        const tot = swaps.reduce((a, x) => ({ cal: a.cal + x.cal, p: a.p + x.p, f: a.f + x.f, c: a.c + x.c }), { cal: 0, p: 0, f: 0, c: 0 });
+        lines.push(`   Swapped meals total: ≈${tot.cal} cal · ${tot.p}P/${tot.f}F/${tot.c}C (est.)`);
+      }
+    }
+    if (commitments.length) {
+      const cDone = commitments.filter((c) => (c.checks || []).includes(dateKey)).length;
+      lines.push("", `COMMITMENTS (${cDone}/${commitments.length})`);
+      commitments.forEach((c) => {
+        lines.push(`${(c.checks || []).includes(dateKey) ? "✅" : "⬜️"} ${c.text}`);
+        const cn = (notes.commits || {})[c.id];
+        if (cn) lines.push(`   ↳ ${cn}`);
+      });
+    }
+    if (profile.name?.trim()) lines.push("", `— ${profile.name.trim()}`);
+    return lines.join("\n");
+  };
+  /* per-tab list for copying into the group chat */
+  const buildSection = (kind) => {
+    const now = new Date();
+    const dateKey = now.toISOString().slice(0, 10);
+    const done = doneLog[dateKey] || {};
+    const notes = dayNotes[dateKey] || {};
+    const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+    const dateLabel = now.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const lines = [];
+    if (kind === "train") {
+      const items = trainItemsFor(weekday, customSplit);
+      const wDone = items.filter((i) => done[i]).length;
+      lines.push(`${weekday} ${dateLabel} — workout (${wDone}/${items.length || 0})`);
+      items.forEach((i) => {
+        lines.push(`${done[i] ? "✅" : "⬜️"} ${i.replace(`${weekday} · `, "")}`);
+        const n = (notes.train || {})[i];
+        if (n) lines.push(`   ↳ ${n}`);
+      });
+      const tn = (notes.train || {})[weekday];
+      if (tn) lines.push(`📝 ${tn}`);
+    } else if (kind === "fuel") {
+      const keys = [];
+      (dietPlan || "").split("\n").forEach((ln) => {
+        const t = ln.trim();
+        if (/^meal \d/i.test(t)) {
+          const ci = t.indexOf(":");
+          const k = (ci > 0 ? t.slice(0, ci) : t).replace(/\s*\(.*\)/, "");
+          if (!keys.includes(k)) keys.push(k);
+        }
+      });
+      const mDone = keys.filter((m) => done[`meal:${m}`]).length;
+      lines.push(`${weekday} ${dateLabel} — meals (${mDone}/${keys.length})`);
+      keys.forEach((m) => {
+        lines.push(`${done[`meal:${m}`] ? "✅" : "⬜️"} ${m}`);
+        const sw = (notes.meals || {})[m];
+        if (sw) lines.push(`   ↳ ate instead: ${sw.text} (≈${sw.cal} cal · ${sw.p}P/${sw.f}F/${sw.c}C est.)`);
+      });
+    } else {
+      const cDone = commitments.filter((c) => (c.checks || []).includes(dateKey)).length;
+      lines.push(`${weekday} ${dateLabel} — commitments (${cDone}/${commitments.length})`);
+      commitments.forEach((c) => {
+        lines.push(`${(c.checks || []).includes(dateKey) ? "✅" : "⬜️"} ${c.text}`);
+        const cn = (notes.commits || {})[c.id];
+        if (cn) lines.push(`   ↳ ${cn}`);
+      });
+    }
+    return lines.join("\n");
+  };
+
   const addSnap = (type, photo, label, video) => {
     const next = [{ id: Date.now().toString(), date: new Date().toISOString().slice(0, 10), type, photo, label: label || "", video: !!video }, ...snaps];
     const vids = next.filter((x) => x.video);
@@ -2759,19 +4418,10 @@ export default function App() {
 
   const toggleTrainer = () => {
     if (trainerMode) { setTrainerMode(false); return; }
-    const stored = trainerCfg.pin;
-    if (!stored) {
-      const newPin = prompt("Set a trainer PIN (first-time setup). Clients won't see upload controls without it:");
-      if (newPin && newPin.trim()) {
-        setTrainerCfg({ ...trainerCfg, pin: newPin.trim() });
-        setTrainerMode(true);
-        setShowTrainerPanel(true);
-      }
-    } else {
-      const entered = prompt("Enter trainer PIN:");
-      if (entered === stored) setTrainerMode(true);
-      else if (entered !== null) alert("Wrong PIN.");
-    }
+    const stored = trainerCfg.pin || "4343";
+    const entered = prompt("Enter trainer PIN:");
+    if (entered === stored) setTrainerMode(true);
+    else if (entered !== null) alert("Wrong PIN.");
   };
 
   const tabs = [
@@ -2809,10 +4459,9 @@ export default function App() {
         .fuel-cols { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
         @media (min-width: 900px) { .fuel-cols { grid-template-columns: 5fr 6fr; } }
         @media (max-width: 520px) {
-          .hdr-label { display: none !important; }
-          .brand-a { font-size: 19px !important; }
-          .brand-slash { font-size: 15px !important; }
-          .brand-b { font-size: 14px !important; letter-spacing: 0.12em !important; }
+          .brand-a { font-size: 23px !important; }
+          .brand-slash { font-size: 18px !important; }
+          .brand-b { font-size: 16px !important; letter-spacing: 0.13em !important; }
         }
         ::selection { background: ${RED}; color: ${PAPER}; }
         select option { background: ${SURFACE2}; }
@@ -2821,47 +4470,28 @@ export default function App() {
         @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
       `}</style>
 
-      {/* header */}
+      {/* header — menu left, brand centered, theme + avatar right */}
       <header className="sticky top-0" style={{ background: "var(--ink-glass)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${LINE}`, zIndex: 50 }}>
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
-        <h1 className="flex items-baseline gap-2" style={{ margin: 0 }} aria-label="PD Performance — online personal training">
-          <span className="brand-a" style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 24, fontWeight: 400, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
-          <span className="brand-slash" style={{ color: RED, fontWeight: 700, fontSize: 20, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
-          <span className="brand-b" style={{ ...fontDisplay, color: PAPER, fontSize: 20, fontWeight: 400, letterSpacing: "0.18em" }}>PERFORMANCE</span>
+      <div className="flex items-center justify-between px-4 py-3" style={{ position: "relative" }}>
+        <button onClick={() => setShowMenu(true)} aria-label="Open menu" title="Menu"
+          style={{ background: "rgba(217,4,41,0.08)", border: "1px solid rgba(217,4,41,0.35)", borderRadius: 12, padding: "7px 8px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+          <Menu size={18} color={RED} />
+        </button>
+        <h1 onClick={() => setPage("home")} className="flex items-baseline gap-2" aria-label="PD Performance — online personal training"
+          style={{ margin: 0, position: "absolute", left: "50%", transform: "translateX(-50%)", cursor: "pointer", whiteSpace: "nowrap" }}>
+          <span className="brand-a" style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 27, fontWeight: 400, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
+          <span className="brand-slash" style={{ color: RED, fontWeight: 700, fontSize: 22, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
+          <span className="brand-b" style={{ ...fontDisplay, color: PAPER, fontSize: 22, fontWeight: 400, letterSpacing: "0.18em" }}>PERFORMANCE</span>
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            style={{ background: "transparent", border: `1px solid ${LINE}`, borderRadius: 8, padding: "5px 7px", cursor: "pointer", display: "flex", alignItems: "center" }}>
-            {theme === "dark" ? <Sun size={13} color={MUTED} /> : <Moon size={13} color={MUTED} />}
-          </button>
-          <button onClick={() => setShowCoach(true)} className="flex items-center gap-1" title="Built-in AI coach" aria-label="Open the built-in AI coach"
-            style={{ background: RED, border: `1px solid ${RED}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
-            <MessageCircle size={13} color={PAPER} />
-            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase hdr-label">Coach</span>
-          </button>
-          <button onClick={() => window.open(aiPlatform.url, "_blank")} className="flex items-center gap-1"
-            title={aiPlatform.id === "chatgpt" ? 'Opens ChatGPT — "pd performance" folder' : `Ask ${aiPlatform.name}`}
-            aria-label={`Open your AI assistant (${aiPlatform.name})`}
-            style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
-            <AiLogo s={13} />
-            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: PAPER }} className="uppercase hdr-label">AI</span>
-          </button>
-          {trainerMode && (
-            <button onClick={() => setShowTrainerPanel(true)} style={{ background: "none", border: "none", cursor: "pointer" }} title="Trainer settings">
-              <Settings size={17} color={RED} />
-            </button>
-          )}
-          <button onClick={toggleTrainer} className="flex items-center gap-1" title={trainerMode ? "Exit trainer mode" : "Trainer sign-in"}
-            style={{ background: trainerMode ? RED : "transparent", border: `1px solid ${trainerMode ? RED : LINE}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer" }}>
-            {trainerMode ? <Unlock size={13} color={PAPER} /> : <Lock size={13} color={MUTED} />}
-            <span style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.12em", color: trainerMode ? PAPER : MUTED }} className="uppercase hdr-label">
-              Trainer
-            </span>
+            style={{ background: "rgba(217,4,41,0.08)", border: "1px solid rgba(217,4,41,0.35)", borderRadius: 99, padding: "7px 8px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+            {theme === "dark" ? <Sun size={14} color={RED} /> : <Moon size={14} color={RED} />}
           </button>
           {session && (
             <button onClick={() => setShowAccount((v) => !v)} aria-label="Account menu" title={profile.name || "Account"}
-              style={{ width: 30, height: 30, borderRadius: 99, overflow: "hidden", border: `1px solid ${showAccount ? RED : LINE}`, background: SURFACE2, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              style={{ width: 32, height: 32, borderRadius: 99, overflow: "hidden", border: `1.5px solid ${showAccount ? RED : "rgba(217,4,41,0.45)"}`, background: SURFACE2, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {profile.avatar
                 ? <img src={profile.avatar} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : <span style={{ ...fontDisplay, color: RED, fontSize: 13 }}>{(profile.name || "A")[0].toUpperCase()}</span>}
@@ -2869,28 +4499,83 @@ export default function App() {
           )}
         </div>
       </div>
-
-      {/* site navigation */}
-      <nav aria-label="Site" className="flex gap-5 px-5 pb-2">
-        {[["home", "Home"], ["about", "About"], ["faq", "FAQ"], ["pricing", "Pricing"]].map(([id, label]) => (
-          <button key={id} onClick={() => setPage(id)}
-            style={{
-              ...fontDisplay, fontSize: 11, letterSpacing: "0.14em", background: "none", border: "none", cursor: "pointer",
-              padding: "4px 0", color: page === id ? RED : MUTED,
-              borderBottom: `2px solid ${page === id ? RED : "transparent"}`,
-            }} className="uppercase">
-            {label}
-          </button>
-        ))}
-      </nav>
       </header>
+
+      {trainerMode && (
+        <div className="flex items-center justify-center gap-2" style={{ background: RED, padding: "5px 10px" }}>
+          <Unlock size={12} color="#fff" />
+          <span style={{ ...fontDisplay, color: "#fff", fontSize: 10, letterSpacing: "0.16em" }} className="uppercase">
+            Trainer mode — dashed red cards are visible only to you
+          </span>
+        </div>
+      )}
+
+      {/* slide-in menu */}
+      {showMenu && (
+        <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,0.58)" }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 286, background: SURFACE, borderRight: `1px solid ${LINE}`, padding: "18px 16px", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+              <span className="flex items-baseline gap-1">
+                <span style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 21, fontWeight: 400, textTransform: "lowercase" }}>pd</span>
+                <span style={{ color: RED, fontWeight: 700, fontSize: 17, transform: "skewX(-12deg)", display: "inline-block" }}>/</span>
+              </span>
+              <button onClick={() => setShowMenu(false)} aria-label="Close menu" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 99, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <X size={15} color={PAPER} />
+              </button>
+            </div>
+            {[["home", "Home"], ["about", "About"], ["faq", "FAQ"], ["pricing", "Pricing"]].map(([id, label]) => (
+              <button key={id} onClick={() => { setPage(id); setShowMenu(false); }}
+                className="flex items-center justify-between w-full"
+                style={{ ...fontDisplay, fontSize: 13, letterSpacing: "0.14em", background: page === id ? SURFACE2 : "none", border: "none", borderLeft: `3px solid ${page === id ? RED : "transparent"}`, borderRadius: 10, cursor: "pointer", padding: "11px 12px", color: page === id ? RED : PAPER, textAlign: "left" }}
+                >
+                <span className="uppercase">{label}</span>
+                <ChevronRight size={14} color={page === id ? RED : MUTED} />
+              </button>
+            ))}
+            <div style={{ borderTop: `1px solid ${LINE}`, margin: "14px 0" }} />
+            <button onClick={() => { setShowCoach(true); setShowMenu(false); }} className="flex items-center gap-3 w-full"
+              style={{ background: RED, border: "none", borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
+              <MessageCircle size={15} color="#fff" />
+              <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: "#fff" }} className="uppercase">AI Coach</span>
+            </button>
+            <button onClick={() => { window.open(aiPlatform.url, "_blank"); setShowMenu(false); }} className="flex items-center gap-3 w-full mt-2"
+              style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
+              <AiLogo s={15} />
+              <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: PAPER }} className="uppercase">Ask {aiPlatform.name}</span>
+            </button>
+            <button onClick={() => { toggleTrainer(); setShowMenu(false); }} className="flex items-center gap-3 w-full mt-2"
+              style={{ background: trainerMode ? RED : SURFACE2, border: `1px solid ${trainerMode ? RED : LINE}`, borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
+              {trainerMode ? <Unlock size={15} color="#fff" /> : <Lock size={15} color={RED} />}
+              <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: trainerMode ? "#fff" : PAPER }} className="uppercase">{trainerMode ? "Exit trainer mode" : "Trainer sign-in"}</span>
+            </button>
+            {trainerMode && (
+              <button onClick={() => { setShowTrainerPanel(true); setShowMenu(false); }} className="flex items-center gap-3 w-full mt-2"
+                style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
+                <Settings size={15} color={RED} />
+                <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: PAPER }} className="uppercase">Trainer settings</span>
+              </button>
+            )}
+            {session && (
+              <button onClick={() => { setShowSettings(true); setShowMenu(false); }} className="flex items-center gap-3 w-full mt-2"
+                style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
+                <Settings size={15} color={MUTED} />
+                <span style={{ ...fontDisplay, fontSize: 12, letterSpacing: "0.12em", color: PAPER }} className="uppercase">Settings</span>
+              </button>
+            )}
+            <div style={{ marginTop: "auto", paddingTop: 16 }}>
+              <p style={{ ...fontBody, color: MUTED, fontSize: 10.5, margin: 0 }}>pd / performance · pdperformance.com</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* account menu */}
       {showAccount && session && (
         <div style={{ position: "fixed", top: 60, right: 14, zIndex: 90, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 14, width: 235 }}>
           <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{profile.name?.trim() || "Athlete"}</div>
           <div style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: 10 }}>
-            Signed in{session.provider !== "guest" ? ` with ${session.provider === "google" ? "Google" : "Apple"}` : " as guest"}
+            {session.provider === "pin" ? `Personal space · ${session.name || "client"}` : `Signed in${session.provider !== "guest" ? ` with ${session.provider === "google" ? "Google" : "Apple"}` : " as guest"}`}
           </div>
           <div className="space-y-2">
             <PhotoPick label={profile.avatar ? "Change photo" : "Set profile photo"} icon={ImagePlus}
@@ -2898,7 +4583,10 @@ export default function App() {
             <Btn variant="ghost" onClick={() => { setShowSettings(true); setShowAccount(false); }} style={{ width: "100%", justifyContent: "center" }}>
               <Settings size={14} /> Settings
             </Btn>
-            <Btn variant="ghost" onClick={() => { setSession(null); setShowAccount(false); }} style={{ width: "100%", justifyContent: "center" }}>
+            <Btn variant="ghost" onClick={() => {
+              try { if (localStorage.getItem("pt-web:ns")) { localStorage.removeItem("pt-web:ns"); window.location.reload(); return; } } catch {}
+              setSession(null); setShowAccount(false);
+            }} style={{ width: "100%", justifyContent: "center" }}>
               Sign out
             </Btn>
           </div>
@@ -2906,14 +4594,26 @@ export default function App() {
       )}
 
       {/* content */}
-      <main className="px-4 pt-5 mx-auto" style={{ maxWidth: page === "home" && tab === "fuel" ? 980 : 640, paddingBottom: 96 }}>
+      <main className="px-4 pt-5 mx-auto" style={{ maxWidth: page === "home" && tab === "fuel" ? 980 : 640, paddingBottom: 118 }}>
         {!loaded ? (
           <div className="flex items-center gap-2 justify-center pt-16" style={{ ...fontMono, color: MUTED, fontSize: 13 }}>
             <RefreshCw size={14} className="animate-spin" /> loading…
           </div>
         ) : page !== "home" ? (
           <>
-            {page === "about" && <AboutPage onStart={() => { setPage("home"); setTab("profile"); }} />}
+            {page === "about" && (
+              <>
+                <AboutPage onStart={() => { setPage("home"); setTab("profile"); }} />
+                <footer style={{ marginTop: 36, borderTop: `1px solid ${LINE}`, paddingTop: 18 }}>
+                  <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>
+                    {SEO_DESC}
+                  </p>
+                  <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 10 }}>
+                    PD Performance · Online personal training, optional Hyrox/CrossFit-style conditioning, custom workout splits & diet plans
+                  </p>
+                </footer>
+              </>
+            )}
             {page === "faq" && <FaqPage onStart={() => setPage("pricing")} />}
             {page === "pricing" && (
               <PricingPage plan={plan} setPlan={setPlan} profile={profile} setProfile={setProfile}
@@ -2923,47 +4623,78 @@ export default function App() {
         ) : (
           <>
             {tab === "profile" && (
-              <ProfileTab profile={profile} setProfile={setProfile} posts={posts} setPosts={setPosts} />
+              <>
+                <ProfileTab profile={profile} setProfile={setProfile} posts={posts} setPosts={setPosts} />
+                <div className="mt-5 space-y-5">
+                  <BodyCompCard profile={profile} />
+                  <Card style={{ border: trainerMode ? `1.5px dashed ${RED}` : `1px solid ${LINE}` }}>
+                    <div className="flex items-center justify-between">
+                      <Eyebrow>View</Eyebrow>
+                      {trainerMode ? <Unlock size={14} color={RED} /> : <Lock size={14} color={MUTED} />}
+                    </div>
+                    <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+                      {trainerMode
+                        ? "You're in trainer view — dashed red cards and trainer controls are visible. Switch to see exactly what clients see."
+                        : "You're in trainee view — this is what your clients see. Trainers can unlock their tools with the PIN."}
+                    </p>
+                    <div className="mt-3">
+                      <Btn variant={trainerMode ? "ghost" : "red"} onClick={toggleTrainer}>
+                        {trainerMode ? <Lock size={14} /> : <Unlock size={14} />}
+                        {trainerMode ? "Switch to trainee view" : "Switch to trainer view"}
+                      </Btn>
+                    </div>
+                  </Card>
+                </div>
+              </>
             )}
             {tab === "train" && (
               <WorkoutsTab trainerMode={trainerMode} videos={videos} addVideo={addVideo} removeVideo={removeVideo}
-                customSplit={customSplit} setCustomSplit={setCustomSplit} profile={profile} snaps={snaps} addSnap={addSnap} />
+                customSplit={customSplit} setCustomSplit={setCustomSplit} profile={profile} snaps={snaps} addSnap={addSnap}
+                isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} doneLog={doneLog} />
             )}
-            {tab === "fuel" && <DietTab profile={profile} dietPrefs={dietPrefs} setDietPrefs={setDietPrefs} dietPlan={dietPlan} setDietPlan={setDietPlan} snaps={snaps} addSnap={addSnap} />}
+            {tab === "fuel" && <DietTab profile={profile} dietPrefs={dietPrefs} setDietPrefs={setDietPrefs} dietPlan={dietPlan} setDietPlan={setDietPlan} snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} doneLog={doneLog} trainerMode={trainerMode} />}
             {tab === "track" && (
               <AccountabilityTab commitments={commitments} setCommitments={setCommitments}
                 dailyLog={dailyLog} setDailyLog={setDailyLog} profile={profile}
-                setProfile={setProfile} progress={progress} setProgress={setProgress} snaps={snaps} />
+                setProfile={setProfile} progress={progress} setProgress={setProgress} snaps={snaps}
+                noteGet={noteGet} noteSet={noteSet} calEvents={calEvents} setCalEvents={setCalEvents} trainerPhone={trainerCfg.phone} />
             )}
-            {tab === "groups" && <GroupsTab profile={profile} posts={posts} setPosts={setPosts} interests={interests} setInterests={setInterests} />}
+            {(tab === "train" || tab === "fuel" || tab === "track") && (
+              <div className="mt-5">
+                <CheckInCard summary={buildCheckin()} phone={trainerCfg.phone}
+                  copyText={buildSection(tab)}
+                  copyLabel={tab === "train" ? "Copy my workouts" : tab === "fuel" ? "Copy my meals" : "Copy my commitments"} />
+              </div>
+            )}
+            {tab === "groups" && <GroupsTab profile={profile} posts={posts} setPosts={setPosts} interests={interests} setInterests={setInterests}
+              chats={chats} setChats={setChats} registered={registeredPeople} gview={gview} setGview={setGview} />}
 
             {/* SEO / GEO footer — profile tab only */}
-            {tab === "profile" && (
-              <footer style={{ marginTop: 36, borderTop: `1px solid ${LINE}`, paddingTop: 18 }}>
-                <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>
-                  {SEO_DESC}
-                </p>
-                <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 10 }}>
-                  PD Performance · Online personal training, optional Hyrox/CrossFit-style conditioning, custom workout splits & diet plans
-                </p>
-              </footer>
-            )}
           </>
         )}
       </main>
 
       {/* bottom nav — app tabs, home page only */}
       {page === "home" && (
-      <nav aria-label="Primary" className="fixed bottom-0 left-0 right-0 flex justify-center" style={{ background: "var(--ink-glass2)", backdropFilter: "blur(10px)", borderTop: `1px solid ${LINE}`, zIndex: 50 }}>
-        <div className="flex w-full" style={{ maxWidth: 640 }}>
+      <nav aria-label="Primary" className="fixed left-0 right-0 flex justify-center"
+        style={{ bottom: "calc(10px + env(safe-area-inset-bottom))", zIndex: 50, pointerEvents: "none", padding: "0 10px" }}>
+        <div className="flex w-full items-center"
+          style={{ maxWidth: 560, pointerEvents: "auto", background: "var(--ink-glass2)", backdropFilter: "blur(14px)", border: `1px solid rgba(217,4,41,0.28)`, borderRadius: 32, padding: "7px 8px", boxShadow: "0 8px 28px rgba(0,0,0,0.45)" }}>
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
+            const isYou = t.id === "profile" && profile.avatar;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)} className="flex-1 flex flex-col items-center gap-1 py-3"
-                style={{ background: "none", border: "none", cursor: "pointer", borderTop: `2px solid ${active ? RED : "transparent"}` }}>
-                <Icon size={18} color={active ? RED : MUTED} />
-                <span style={{ ...fontDisplay, fontSize: 8.5, letterSpacing: "0.14em", color: active ? PAPER : MUTED }} className="uppercase">{t.label}</span>
+              <button key={t.id} onClick={() => setTab(t.id)} className="flex-1 flex flex-col items-center"
+                style={{ background: active ? "rgba(217,4,41,0.16)" : "none", border: "none", cursor: "pointer", padding: "7px 2px 6px", minWidth: 0, borderRadius: 24, transition: "background .15s" }}>
+                {isYou ? (
+                  <span style={{ width: 22, height: 22, borderRadius: 99, overflow: "hidden", border: `1.5px solid ${active ? RED : LINE}`, display: "flex" }}>
+                    <img src={profile.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </span>
+                ) : (
+                  <Icon size={21} color={active ? RED : MUTED} strokeWidth={active ? 2.5 : 2} fill={active ? "rgba(217,4,41,0.22)" : "none"} />
+                )}
+                <span style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.06em", fontWeight: active ? 700 : 400, color: active ? RED : MUTED, marginTop: 3, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} className="uppercase">{t.id === "profile" ? "You" : t.label}</span>
               </button>
             );
           })}
@@ -2993,7 +4724,8 @@ export default function App() {
       {showSettings && <SettingsPanel profile={profile} setProfile={setProfile} onClose={() => setShowSettings(false)} />}
 
       {/* login gate — shown until signed in */}
-      {loaded && !session && <LoginGate onLogin={(provider) => setSession({ provider, at: Date.now() })} />}
+      {loaded && !session && <LoginGate onLogin={(provider) => setSession({ provider, at: Date.now() })}
+        onPin={(pin) => clientPinLogin(pin, trainerCfg.clients)} />}
     </div>
   );
 }
