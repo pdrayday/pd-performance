@@ -49,6 +49,35 @@ const sset = async (k, v, shared = false) => {
   }
 };
 
+/* ---------- accountability tracking window ----------
+   Lets someone start their percentages fresh from a chosen date (new client
+   starting mid-week/month) and skip stretches that shouldn't count (sick week,
+   travel). Check-offs are never deleted — days outside the window just stop
+   counting. Applies to Training, Fuel and Commitment percentages alike. */
+const ACCT_KEY = "pt:acct-window";
+let acctWin = { start: null, skips: [] };
+const acctListeners = new Set();
+const setAcctWindow = (v) => {
+  acctWin = { start: v.start || null, skips: v.skips || [] };
+  sset(ACCT_KEY, acctWin);
+  acctListeners.forEach((f) => f(acctWin));
+};
+sget(ACCT_KEY).then((v) => {
+  if (v) { acctWin = { start: v.start || null, skips: v.skips || [] }; acctListeners.forEach((f) => f(acctWin)); }
+});
+function useAcctWindow() {
+  const [w, setW] = useState(acctWin);
+  useEffect(() => { acctListeners.add(setW); setW(acctWin); return () => acctListeners.delete(setW); }, []);
+  return w;
+}
+const acctKey = (d) => d.toISOString().slice(0, 10);
+const dayCounts = (d, w = acctWin) => {
+  const k = acctKey(d);
+  if (w.start && k < w.start) return false;
+  return !(w.skips || []).some((r) => k >= r.from && k <= r.to);
+};
+const fmtShort = (k) => new Date(`${k}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
 /* ---------- image compression (keeps storage under limits) ---------- */
 const compressImage = (file, maxW = 600, quality = 0.65) =>
   new Promise((resolve, reject) => {
@@ -518,8 +547,8 @@ const INDUSTRY_FAQS = [
 
 /* ---------- small UI atoms ---------- */
 const Eyebrow = ({ children }) => (
-  <h2 className="uppercase flex items-center" style={{ ...fontDisplay, color: RED, letterSpacing: "0.22em", fontSize: 11, fontWeight: 600, margin: 0 }}>
-    <span aria-hidden="true" style={{ display: "inline-block", width: 14, height: 3, background: RED, borderRadius: 99, marginRight: 8, flexShrink: 0 }} />
+  <h2 className="uppercase flex items-center" style={{ ...fontDisplay, color: RED, letterSpacing: "0.16em", fontSize: 15, fontWeight: 700, lineHeight: 1.2, margin: 0 }}>
+    <span aria-hidden="true" style={{ display: "inline-block", width: 4, height: 17, background: RED, borderRadius: 99, marginRight: 10, flexShrink: 0 }} />
     {children}
   </h2>
 );
@@ -1533,18 +1562,122 @@ function StatBanner({ label, pct, caption }) {
 
 /* day / week / month triple stat */
 function TriBanner({ label, day, week, month, caption }) {
+  const w = useAcctWindow();
+  const [showReset, setShowReset] = useState(false);
   const cell = (lab, p) => (
     <div key={lab} style={{ flex: 1, textAlign: "center", background: SURFACE2, borderRadius: 10, padding: "10px 6px", border: `1px solid ${LINE}` }}>
-      <div style={{ ...fontDisplay, fontSize: 24, color: pctColor(p), lineHeight: 1 }}>{p}<span style={{ fontSize: 12 }}>%</span></div>
+      {p == null
+        ? <div style={{ ...fontDisplay, fontSize: 24, color: MUTED, lineHeight: 1 }}>—</div>
+        : <div style={{ ...fontDisplay, fontSize: 24, color: pctColor(p), lineHeight: 1 }}>{p}<span style={{ fontSize: 12 }}>%</span></div>}
       <div style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.14em", marginTop: 4 }} className="uppercase">{lab}</div>
     </div>
   );
+  const todayK = acctKey(new Date());
+  const notes = [];
+  if (w.start && w.start > todayK) notes.push(`Tracking starts ${fmtShort(w.start)}`);
+  else if (w.start) notes.push(`Counting from ${fmtShort(w.start)}`);
+  if ((w.skips || []).length) notes.push(`${w.skips.length} skipped stretch${w.skips.length > 1 ? "es" : ""}`);
   return (
     <Card>
-      <Eyebrow>{label}</Eyebrow>
+      <div className="flex items-center justify-between gap-2">
+        <Eyebrow>{label}</Eyebrow>
+        <button onClick={() => setShowReset(true)} aria-label="Reset or skip days" title="Reset or skip days"
+          className="flex items-center gap-1 uppercase"
+          style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", color: RED, background: "transparent", border: `1px solid ${LINE}`, borderRadius: 99, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
+          <RefreshCw size={12} color={RED} /> Reset
+        </button>
+      </div>
       <div className="flex gap-2 mt-3">{cell("Today", day)}{cell("This week", week)}{cell("This month", month)}</div>
+      {notes.length > 0 && (
+        <p style={{ ...fontBody, color: PAPER, fontSize: 11.5, marginTop: 8, marginBottom: 0, borderLeft: `2px solid ${RED}`, paddingLeft: 8 }}>{notes.join(" · ")}</p>
+      )}
       {caption && <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8, marginBottom: 0 }}>{caption}</p>}
+      {showReset && <AcctResetPanel onClose={() => setShowReset(false)} />}
     </Card>
+  );
+}
+
+/* reset / skip-days panel for the accountability percentages */
+function AcctResetPanel({ onClose }) {
+  const w = useAcctWindow();
+  const todayK = acctKey(new Date());
+  const tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+  const tomorrowK = acctKey(tmr);
+  const [start, setStart] = useState(w.start || todayK);
+  const [from, setFrom] = useState(todayK);
+  const [to, setTo] = useState(todayK);
+  const chip = (lab, val) => (
+    <button key={lab} onClick={() => setStart(val)} className="uppercase"
+      style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", padding: "6px 12px", borderRadius: 99, cursor: "pointer",
+        background: start === val ? RED : "transparent", color: start === val ? "#fff" : MUTED, border: `1px solid ${start === val ? RED : LINE}` }}>
+      {lab}
+    </button>
+  );
+  const addSkip = () => {
+    if (!from || !to) return;
+    const a = from <= to ? from : to, b = from <= to ? to : from;
+    setAcctWindow({ ...w, skips: [...(w.skips || []), { from: a, to: b }].sort((x, y) => (x.from < y.from ? -1 : 1)) });
+  };
+  const sub = { ...fontDisplay, color: PAPER, fontSize: 12.5, letterSpacing: "0.12em", fontWeight: 600 };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 320, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(440px, 100%)", maxHeight: "88vh", overflowY: "auto", background: SURFACE, border: `1px solid ${LINE}`, borderTop: `2px solid ${RED}`, borderRadius: 16, padding: 18 }}>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Reset accountability</Eyebrow>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 8, lineHeight: 1.5 }}>
+          Applies to your Training, Fuel and Commitment percentages. Your check-offs are never deleted — days outside the window just stop counting, so you can undo any of this.
+        </p>
+
+        <div className="uppercase mt-4" style={sub}>Start fresh from</div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 4, lineHeight: 1.5 }}>
+          Starting mid-week or mid-month? Pick your day one. Days before it won't count against you.
+        </p>
+        <div className="flex gap-2 mt-2 flex-wrap items-center">
+          {chip("Today", todayK)}{chip("Tomorrow", tomorrowK)}
+          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12.5 }} />
+        </div>
+        <div className="flex gap-2 mt-3">
+          <Btn onClick={() => { setAcctWindow({ ...w, start }); onClose(); }} style={{ flex: 1, justifyContent: "center" }}>
+            <RefreshCw size={14} /> Start fresh {start === todayK ? "today" : start === tomorrowK ? "tomorrow" : fmtShort(start)}
+          </Btn>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${LINE}`, marginTop: 16, paddingTop: 14 }}>
+          <div className="uppercase" style={sub}>Skip days</div>
+          <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 4, lineHeight: 1.5 }}>
+            Sick, traveling, life happened? Excuse those days — they drop out of every percentage and won't break your streaks.
+          </p>
+          <div className="flex gap-2 mt-2 items-center flex-wrap">
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12.5 }} />
+            <span style={{ ...fontBody, color: MUTED, fontSize: 12 }}>to</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12.5 }} />
+            <Btn variant="ghost" onClick={addSkip}><Plus size={14} /> Skip</Btn>
+          </div>
+          {(w.skips || []).length > 0 && (
+            <div className="mt-3 space-y-2">
+              {w.skips.map((r, i) => (
+                <div key={`${r.from}-${r.to}-${i}`} className="flex items-center justify-between" style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 12px" }}>
+                  <span style={{ ...fontBody, color: PAPER, fontSize: 12.5 }}>{r.from === r.to ? fmtShort(r.from) : `${fmtShort(r.from)} – ${fmtShort(r.to)}`}</span>
+                  <button onClick={() => setAcctWindow({ ...w, skips: w.skips.filter((_, j) => j !== i) })} aria-label="Remove skipped days" style={{ background: "none", border: "none", cursor: "pointer" }}>
+                    <X size={14} color={MUTED} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {(w.start || (w.skips || []).length > 0) && (
+          <div style={{ borderTop: `1px solid ${LINE}`, marginTop: 16, paddingTop: 14 }}>
+            <Btn variant="ghost" onClick={() => { setAcctWindow({ start: null, skips: [] }); onClose(); }} style={{ width: "100%", justifyContent: "center" }}>
+              Undo all — count every day again
+            </Btn>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -2090,16 +2223,20 @@ function downloadDietPdf(dietPlan, prefs, profile, light, preview) {
 }
 
 function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap, isDone, toggleDone, noteGet, noteSet, doneLog }) {
+  useAcctWindow();
   const trainPctOver = (n) => {
-    let exp = 0, got = 0;
+    let exp = 0, got = 0, counted = 0;
     for (let i = 0; i < n; i++) {
       const d = new Date(); d.setDate(d.getDate() - i);
+      if (!dayCounts(d)) continue;
+      counted++;
       const wd = d.toLocaleDateString("en-US", { weekday: "long" });
       const items = trainItemsFor(wd, customSplit);
       exp += items.length;
       const day = (doneLog || {})[d.toISOString().slice(0, 10)] || {};
       got += items.filter((it) => day[it]).length;
     }
+    if (!counted) return null;
     return exp ? Math.round((got / exp) * 100) : 0;
   };
   const [openDay, setOpenDay] = useState(null);
@@ -2429,16 +2566,18 @@ function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snap
     });
     return keys;
   })();
+  useAcctWindow();
   const mealPctOver = (n) => {
     if (!mealKeysList.length) return null;
     let exp = 0, got = 0;
     for (let i = 0; i < n; i++) {
       const d = new Date(); d.setDate(d.getDate() - i);
+      if (!dayCounts(d)) continue;
       exp += mealKeysList.length;
       const day = (doneLog || {})[d.toISOString().slice(0, 10)] || {};
       got += mealKeysList.filter((k) => day[`meal:${k}`]).length;
     }
-    return exp ? Math.round((got / exp) * 100) : 0;
+    return exp ? Math.round((got / exp) * 100) : null;
   };
   const [prefs, setPrefs] = useState(dietPrefs);
   const [loading, setLoading] = useState(false);
@@ -2769,10 +2908,11 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
   const streak = (c) => {
     let s = 0;
     const d = new Date();
-    for (;;) {
+    for (let guard = 0; guard < 3660; guard++) {
       const key = d.toISOString().slice(0, 10);
       if (c.checks.includes(key)) { s++; d.setDate(d.getDate() - 1); }
       else if (key === today) { d.setDate(d.getDate() - 1); }
+      else if (!dayCounts(d) && !(acctWin.start && key < acctWin.start)) { d.setDate(d.getDate() - 1); } /* excused day — streak carries over */
       else break;
     }
     return s;
@@ -2856,17 +2996,23 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
     return () => clearInterval(iv);
   }, [commitments]);
 
+  useAcctWindow();
   const commitPctOver = (c, n) => {
-    const age = Math.max(1, Math.ceil((Date.now() - (parseInt(c.id, 10) || Date.now())) / 864e5));
-    const den = Math.min(n, age) || 1;
-    let got = 0;
+    const createdK = acctKey(new Date(parseInt(c.id, 10) || Date.now()));
+    let got = 0, den = 0;
     for (let i = 0; i < n; i++) {
       const d = new Date(); d.setDate(d.getDate() - i);
-      if ((c.checks || []).includes(d.toISOString().slice(0, 10))) got++;
+      const k = acctKey(d);
+      if (k < createdK || !dayCounts(d)) continue;
+      den++;
+      if ((c.checks || []).includes(k)) got++;
     }
-    return Math.round((got / den) * 100);
+    return den ? Math.round((got / den) * 100) : null;
   };
-  const overallOver = (n) => (commitments.length ? Math.round(commitments.reduce((a, c) => a + commitPctOver(c, n), 0) / commitments.length) : 0);
+  const overallOver = (n) => {
+    const vals = commitments.map((c) => commitPctOver(c, n)).filter((v) => v != null);
+    return vals.length ? Math.round(vals.reduce((a, v) => a + v, 0) / vals.length) : null;
+  };
 
   return (
     <div
@@ -2961,15 +3107,16 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
             <div className="mt-3 space-y-2">
               {commitments.map((c) => {
                 const pw = commitPctOver(c, 7), pm = commitPctOver(c, 30);
+                const show = (v) => (v == null ? "—" : `${v}%`);
                 return (
                   <div key={c.id} className="flex items-center justify-between gap-3">
                     <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.text}</span>
                     <span className="flex items-center gap-2" style={{ flexShrink: 0 }}>
                       <span style={{ width: 60, height: 5, background: SURFACE2, borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
-                        <span style={{ display: "block", width: `${pw}%`, height: "100%", background: pctColor(pw), borderRadius: 99 }} />
+                        <span style={{ display: "block", width: `${pw || 0}%`, height: "100%", background: pctColor(pw), borderRadius: 99 }} />
                       </span>
-                      <span style={{ ...fontMono, fontSize: 11.5, color: pctColor(pw), width: 60, textAlign: "right" }}>wk {pw}%</span>
-                      <span style={{ ...fontMono, fontSize: 11.5, color: pctColor(pm), width: 60, textAlign: "right" }}>mo {pm}%</span>
+                      <span style={{ ...fontMono, fontSize: 11.5, color: pw == null ? MUTED : pctColor(pw), width: 60, textAlign: "right" }}>wk {show(pw)}</span>
+                      <span style={{ ...fontMono, fontSize: 11.5, color: pm == null ? MUTED : pctColor(pm), width: 60, textAlign: "right" }}>mo {show(pm)}</span>
                     </span>
                   </div>
                 );
@@ -4678,6 +4825,18 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* floating Messages button — one tap to Community chats from any tab */}
+      {page === "home" && !(tab === "groups" && gview === "chats") && (
+        <button onClick={() => { setTab("groups"); setGview("chats"); window.scrollTo({ top: 0 }); }}
+          aria-label="Open messages" title="Messages"
+          className="active:scale-95"
+          style={{ position: "fixed", zIndex: 51, right: "max(16px, calc((100vw - 560px) / 2 + 12px))", bottom: "calc(88px + env(safe-area-inset-bottom))",
+            width: 54, height: 54, borderRadius: 99, background: RED, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 18px rgba(217,4,41,0.45)", transition: "transform .08s ease" }}>
+          <MessageCircle size={24} color="#fff" strokeWidth={2.3} />
+        </button>
+      )}
 
       {/* bottom nav — app tabs, home page only */}
       {page === "home" && (
