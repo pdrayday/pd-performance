@@ -3,7 +3,7 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send
+  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -77,6 +77,49 @@ const dayCounts = (d, w = acctWin) => {
   return !(w.skips || []).some((r) => k >= r.from && k <= r.to);
 };
 const fmtShort = (k) => new Date(`${k}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+/* ---------- late logging: check things off up to a week after the fact ---------- */
+const LATE_DAYS = 7;
+const logChoices = () => [...Array(LATE_DAYS + 1)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return { k: acctKey(d), d, i }; });
+const canLogDay = (k) => logChoices().some((o) => o.k === k);
+
+/* ---------- editable workouts: per-day overrides on top of whichever split is active ----------
+   Stored per person. `base` fingerprints the original day, so if the coach updates a
+   program the old personal edit stops applying instead of hiding the new version. */
+const SPLIT_EDITS_KEY = "pt:split-edits";
+let splitEdits = {};
+const splitEditListeners = new Set();
+const setSplitEdits = (v) => { splitEdits = v || {}; sset(SPLIT_EDITS_KEY, splitEdits); splitEditListeners.forEach((f) => f(splitEdits)); };
+sget(SPLIT_EDITS_KEY).then((v) => { if (v) { splitEdits = v; splitEditListeners.forEach((f) => f(splitEdits)); } });
+function useSplitEdits() {
+  const [e, setE] = useState(splitEdits);
+  useEffect(() => { splitEditListeners.add(setE); setE(splitEdits); return () => splitEditListeners.delete(setE); }, []);
+  return e;
+}
+const daySig = (d) => JSON.stringify([d.focus || "", (d.exercises || []).map((x) => x.name)]);
+function applySplitEdits(days, isCustom) {
+  const bucket = splitEdits[isCustom ? "custom" : "coach"] || {};
+  return (days || []).map((d) => {
+    const e = bucket[d.day];
+    if (!e || e.base !== daySig(d)) return d;
+    return { ...d, focus: e.focus || d.focus, exercises: e.exercises || [], edited: true };
+  });
+}
+/* superset links: `ss: true` = "back to back with the next exercise". Older plans only say
+   "superset with …" in the note, so those pairs get converted once. */
+function ssFlags(list) {
+  const arr = (list || []).map((x) => ({ ...x }));
+  if (arr.some((x) => typeof x.ss === "boolean")) {
+    arr.forEach((x, i) => { x.ss = !!x.ss && i < arr.length - 1; });
+    return arr;
+  }
+  const isSS = (x) => (x?.note || "").toLowerCase().includes("superset with");
+  for (let i = 0; i < arr.length; i++) {
+    arr[i].ss = false;
+    if (isSS(arr[i]) && isSS(arr[i + 1])) { arr[i].ss = true; arr[i + 1].ss = false; i++; }
+  }
+  return arr;
+}
 
 /* ---------- image compression (keeps storage under limits) ---------- */
 const compressImage = (file, maxW = 600, quality = 0.65) =>
@@ -1683,10 +1726,11 @@ function AcctResetPanel({ onClose }) {
 
 /* expected checkable workout items for a weekday — mirrors the Train tab */
 function trainItemsFor(weekday, customSplit) {
-  if (weekday === "Sunday") return [];
-  const split = customSplit ? customSplit.days : SPLIT;
+  const split = applySplitEdits(customSplit ? customSplit.days : SPLIT, !!customSplit);
   const today = (split || []).find((x) => x.day === weekday);
-  if (customSplit && (!today || /rest/i.test(today.focus || ""))) return [];
+  const hasEx = !!(today && today.exercises && today.exercises.length);
+  if (!hasEx && (weekday === "Sunday" || !today || /rest/i.test(today.focus || ""))) return [];
+  if (customSplit && !today) return [];
   const items = ["Cardio · Warm-up"];
   const legDay = !customSplit && (weekday === "Monday" || weekday === "Thursday");
   if (today && today.hyrox && !customSplit) HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
@@ -2110,31 +2154,238 @@ function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel, isDone, toggleD
 }
 
 function ExerciseList({ exercises, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet }) {
-  const isSS = (x) => (x?.note || "").toLowerCase().includes("superset with");
+  const list = ssFlags(exercises);
+  const rowProps = { snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet };
   const rows = [];
-  for (let i = 0; i < exercises.length; i++) {
-    const a = exercises[i], b = exercises[i + 1];
-    if (isSS(a) && isSS(b)) {
+  for (let i = 0; i < list.length; i++) {
+    const group = [list[i]];
+    let j = i;
+    while (list[j].ss && j + 1 < list.length) { group.push(list[j + 1]); j++; }
+    if (group.length > 1) {
       rows.push(
         <div key={i} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderLeft: `3px solid ${RED}`, borderRadius: 10, overflow: "hidden" }}>
           <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, padding: "7px 12px 0" }}>
             <Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
           </div>
-          <ExerciseRow ex={a} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
-          <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
-            <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
-            <Link2 size={12} color={RED} />
-            <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
-          </div>
-          <ExerciseRow ex={b} inSuperset snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
+          {group.map((ex, gi) => (
+            <React.Fragment key={gi}>
+              {gi > 0 && (
+                <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
+                  <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
+                  <Link2 size={12} color={RED} />
+                  <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
+                </div>
+              )}
+              <ExerciseRow ex={ex} inSuperset {...rowProps} />
+            </React.Fragment>
+          ))}
         </div>
       );
-      i++;
+      i = j;
     } else {
-      rows.push(<ExerciseRow key={i} ex={a} snaps={snaps} addSnap={addSnap} dayLabel={dayLabel} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />);
+      rows.push(<ExerciseRow key={i} ex={list[i]} {...rowProps} />);
     }
   }
   return <div className="mt-3 space-y-2">{rows}</div>;
+}
+
+/* small square icon button used by the editors */
+const IconBtn = ({ onClick, label, children, disabled }) => (
+  <button onClick={onClick} disabled={disabled} aria-label={label} title={label}
+    style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 7, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.35 : 1, flexShrink: 0, padding: 0 }}>
+    {children}
+  </button>
+);
+
+/* ---------- workout editor: rename, reorder/swap, link supersets, add, start from scratch ---------- */
+function WorkoutEditor({ day, onSave, onCancel, onRestore }) {
+  const [focus, setFocus] = useState(day.focus || "");
+  const [rows, setRows] = useState(() => ssFlags(day.exercises).map((x, i) => ({ ...x, _k: `${i}-${Math.random()}` })));
+  const upd = (i, patch) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  /* swap two exercises but keep the superset links where they are — so swapping the two
+     halves of a superset keeps them paired, just in the new order */
+  const swap = (i, j) => {
+    if (j < 0 || j >= rows.length) return;
+    const a = rows.map((r) => ({ ...r }));
+    const ssI = a[i].ss, ssJ = a[j].ss;
+    [a[i], a[j]] = [a[j], a[i]];
+    a[i].ss = ssI; a[j].ss = ssJ;
+    setRows(a);
+  };
+  const remove = (i) => {
+    const a = rows.map((r) => ({ ...r }));
+    if (i > 0 && !a[i].ss) a[i - 1].ss = false;
+    a.splice(i, 1);
+    setRows(a);
+  };
+  const add = () => setRows([...rows, { name: "", sets: 3, reps: "10–12", note: "", ss: false, _k: `n-${Math.random()}` }]);
+  const save = () => {
+    const kept = rows.filter((r) => (r.name || "").trim());
+    const out = kept.map((r, i) => {
+      const { _k, ...x } = r;
+      return { ...x, name: x.name.trim(), note: (x.note || "").trim(), ss: !!x.ss && i < kept.length - 1 };
+    });
+    onSave(focus.trim() || day.focus || "Workout", out);
+  };
+  const inGroup = (i) => rows[i]?.ss || (i > 0 && rows[i - 1]?.ss);
+  const small = { ...inputStyle, padding: "7px 9px", fontSize: 12.5 };
+  return (
+    <div className="mt-3 space-y-2">
+      <Field label="Workout name">
+        <input style={small} value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="e.g. Chest & Biceps" />
+      </Field>
+      {rows.length === 0 && (
+        <p style={{ ...fontBody, color: MUTED, fontSize: 12.5, margin: "6px 0" }}>Blank workout — tap “Add exercise” to build it from scratch.</p>
+      )}
+      {rows.map((r, i) => (
+        <React.Fragment key={r._k}>
+          <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderLeft: `3px solid ${inGroup(i) ? RED : LINE}`, borderRadius: 10, padding: "9px 10px" }}>
+            {(i === 0 || !rows[i - 1].ss) && r.ss && (
+              <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, marginBottom: 6 }}>
+                <Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <input style={{ ...small, fontWeight: 600 }} value={r.name} placeholder="Exercise name" onChange={(e) => upd(i, { name: e.target.value })} />
+              <IconBtn label="Move up" onClick={() => swap(i, i - 1)} disabled={i === 0}><ChevronUp size={15} color={PAPER} /></IconBtn>
+              <IconBtn label="Move down" onClick={() => swap(i, i + 1)} disabled={i === rows.length - 1}><ChevronDown size={15} color={PAPER} /></IconBtn>
+              <IconBtn label="Remove exercise" onClick={() => remove(i)}><Trash2 size={13} color={MUTED} /></IconBtn>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <input style={{ ...small, width: 52, textAlign: "center" }} value={r.sets} placeholder="sets" aria-label="Sets" onChange={(e) => upd(i, { sets: e.target.value })} />
+              <span style={{ ...fontMono, color: MUTED, fontSize: 12 }}>×</span>
+              <input style={{ ...small, width: 74, textAlign: "center" }} value={r.reps} placeholder="reps" aria-label="Reps" onChange={(e) => upd(i, { reps: e.target.value })} />
+              <input style={small} value={r.note || ""} placeholder="Cue / note (optional)" onChange={(e) => upd(i, { note: e.target.value })} />
+            </div>
+          </div>
+          {i < rows.length - 1 && (
+            <div className="flex justify-center">
+              <button onClick={() => upd(i, { ss: !r.ss })} className="flex items-center gap-1 uppercase"
+                style={{ ...fontDisplay, fontSize: 9.5, letterSpacing: "0.12em", padding: "4px 10px", borderRadius: 99, cursor: "pointer",
+                  background: r.ss ? "rgba(217,4,41,0.14)" : "transparent", color: r.ss ? RED : MUTED, border: `1px ${r.ss ? "solid" : "dashed"} ${r.ss ? RED : LINE}` }}>
+                <Link2 size={11} /> {r.ss ? "Superset — tap to unlink" : "Superset with next"}
+              </button>
+            </div>
+          )}
+        </React.Fragment>
+      ))}
+      <div className="flex gap-2 flex-wrap pt-1">
+        <Btn variant="ghost" onClick={add}><Plus size={14} /> Add exercise</Btn>
+        {rows.length > 0 && <Btn variant="ghost" onClick={() => setRows([])}>Start from scratch</Btn>}
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Btn onClick={save} style={{ flex: 1, justifyContent: "center" }}><Check size={14} /> Save workout</Btn>
+        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+      </div>
+      {onRestore && (
+        <button onClick={onRestore} className="flex items-center gap-1"
+          style={{ ...fontBody, color: MUTED, fontSize: 11.5, background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
+          <RotateCcw size={12} /> Restore the original workout
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---------- meal plan editor: edit, reorder, add or remove any line ---------- */
+const isPlanHead = (t) => /^[A-Z][A-Z \/&'\u2019-]{3,}$/.test(t);
+const isPlanMeal = (t) => /^meal \d/i.test(t);
+const renumberMeals = (rows) => {
+  let n = 0;
+  return rows.map((r) => {
+    if (isPlanHead(r.t)) { n = 0; return r; }
+    if (isPlanMeal(r.t)) { n++; return { ...r, t: r.t.replace(/^meal \d+/i, `Meal ${n}`) }; }
+    return r;
+  });
+};
+function MealPlanEditor({ plan, onSave, onCancel }) {
+  const [rows, setRowsRaw] = useState(() => (plan || "").split("\n").map((x) => x.trim()).filter(Boolean).map((t, i) => ({ t, _k: `${i}-${Math.random()}` })));
+  const setRows = (r) => setRowsRaw(renumberMeals(r));
+  const upd = (i, t) => setRows(rows.map((r, j) => (j === i ? { ...r, t } : r)));
+  const swap = (i, j) => { if (j < 0 || j >= rows.length) return; const a = [...rows]; [a[i], a[j]] = [a[j], a[i]]; setRows(a); };
+  const remove = (i) => setRows(rows.filter((_, j) => j !== i));
+  const nextMealNo = (i) => {
+    let n = 0;
+    for (let j = i; j >= 0; j--) { if (isPlanHead(rows[j].t)) break; if (isPlanMeal(rows[j].t)) n++; }
+    return n + 1;
+  };
+  const insertMeal = (i) => { const a = [...rows]; a.splice(i + 1, 0, { t: `Meal ${nextMealNo(i)}: `, _k: `n-${Math.random()}` }); setRows(a); };
+  const addEnd = (t) => setRows([...rows, { t, _k: `n-${Math.random()}` }]);
+  const save = () => {
+    const kept = rows.map((r) => r.t.trim()).filter(Boolean);
+    const out = [];
+    kept.forEach((t, i) => { if (i > 0 && isPlanHead(t)) out.push(""); out.push(t); });
+    onSave(out.join("\n"));
+  };
+  const small = { ...inputStyle, padding: "7px 9px", fontSize: 12.5 };
+  return (
+    <div className="mt-3 space-y-2">
+      <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, lineHeight: 1.5, margin: 0 }}>
+        Lines starting with “Meal 1:”, “Meal 2:” get a checkbox. Section titles are ALL CAPS (e.g. TRAINING DAYS).
+      </p>
+      {rows.map((r, i) => {
+        const head = isPlanHead(r.t), meal = isPlanMeal(r.t);
+        return (
+          <div key={r._k} className="flex items-center gap-2"
+            style={{ background: head ? "transparent" : SURFACE, border: head ? "none" : `1px solid ${LINE}`, borderRadius: 10, padding: head ? "6px 0 0" : "7px 8px" }}>
+            <textarea rows={meal || head ? 1 : 2} value={r.t} onChange={(e) => upd(i, e.target.value)}
+              style={{ ...small, resize: "vertical", minHeight: 34, ...(head ? { ...fontDisplay, color: RED, letterSpacing: "0.12em" } : {}) }} />
+            {meal && <IconBtn label="Add a meal below" onClick={() => insertMeal(i)}><Plus size={14} color={RED} /></IconBtn>}
+            <IconBtn label="Move up" onClick={() => swap(i, i - 1)} disabled={i === 0}><ChevronUp size={15} color={PAPER} /></IconBtn>
+            <IconBtn label="Move down" onClick={() => swap(i, i + 1)} disabled={i === rows.length - 1}><ChevronDown size={15} color={PAPER} /></IconBtn>
+            <IconBtn label="Remove line" onClick={() => remove(i)}><Trash2 size={13} color={MUTED} /></IconBtn>
+          </div>
+        );
+      })}
+      <div className="flex gap-2 flex-wrap pt-1">
+        <Btn variant="ghost" onClick={() => addEnd(`Meal ${rows.length ? nextMealNo(rows.length - 1) : 1}: `)}><Plus size={14} /> Meal</Btn>
+        <Btn variant="ghost" onClick={() => addEnd("NEW SECTION")}><Plus size={14} /> Section</Btn>
+        <Btn variant="ghost" onClick={() => addEnd("Note")}><Plus size={14} /> Note</Btn>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Btn onClick={save} style={{ flex: 1, justifyContent: "center" }}><Check size={14} /> Save meal plan</Btn>
+        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- "logging for" day picker — log up to 7 days late at full credit ---------- */
+function LogDayPicker({ value, onChange, what }) {
+  const opts = logChoices();
+  const sel = opts.find((o) => o.k === value) || opts[0];
+  return (
+    <Card style={{ padding: 14 }}>
+      <div className="flex items-center justify-between gap-2">
+        <Eyebrow>Logging for</Eyebrow>
+        <span style={{ ...fontBody, color: MUTED, fontSize: 11 }}>Catch up to 7 days late</span>
+      </div>
+      <div className="flex gap-2 mt-3" style={{ overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+        {opts.map((o) => {
+          const on = o.k === sel.k;
+          const lab = o.i === 0 ? "Today" : o.i === 1 ? "Yest." : o.d.toLocaleDateString("en-US", { weekday: "short" });
+          return (
+            <button key={o.k} onClick={() => onChange(o)} aria-pressed={on}
+              style={{ flexShrink: 0, minWidth: 54, textAlign: "center", padding: "7px 8px", borderRadius: 12, cursor: "pointer",
+                background: on ? RED : "transparent", border: `1px solid ${on ? RED : LINE}`, color: on ? "#fff" : PAPER }}>
+              <div style={{ ...fontDisplay, fontSize: 11, letterSpacing: "0.08em" }} className="uppercase">{lab}</div>
+              <div style={{ ...fontMono, fontSize: 10, opacity: 0.8, marginTop: 1 }}>{o.d.getMonth() + 1}/{o.d.getDate()}</div>
+            </button>
+          );
+        })}
+      </div>
+      {sel.i > 0 && (
+        <p style={{ ...fontBody, color: PAPER, fontSize: 11.5, marginTop: 10, marginBottom: 0, borderLeft: `2px solid ${RED}`, paddingLeft: 8, lineHeight: 1.5 }}>
+          Back-logging {sel.d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} — every {what} you check counts for that day at full credit.
+        </p>
+      )}
+      {sel.i === 0 && (
+        <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8, marginBottom: 0, lineHeight: 1.5 }}>
+          Forgot to log a day? Tap it above. After 7 days it locks in.
+        </p>
+      )}
+    </Card>
+  );
 }
 
 /* ---------- client-side PDF export (brand header, letter size) ---------- */
@@ -2222,8 +2473,15 @@ function downloadDietPdf(dietPlan, prefs, profile, light, preview) {
   st.doc.save("pd-meal-plan.pdf");
 }
 
-function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap, isDone, toggleDone, noteGet, noteSet, doneLog }) {
+function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap, isDone: isDoneAt, toggleDone: toggleDoneAt, noteGet: noteGetAt, noteSet: noteSetAt, doneLog }) {
   useAcctWindow();
+  const edits = useSplitEdits();
+  const [logDk, setLogDk] = useState(() => acctKey(new Date()));
+  const [editDay, setEditDay] = useState(null);
+  const isDone = (id) => isDoneAt(id, logDk);
+  const toggleDone = (id) => toggleDoneAt(id, logDk);
+  const noteGet = (kind, key) => noteGetAt(kind, key, logDk);
+  const noteSet = (kind, key, val) => noteSetAt(kind, key, val, logDk);
   const trainPctOver = (n) => {
     let exp = 0, got = 0, counted = 0;
     for (let i = 0; i < n; i++) {
@@ -2274,9 +2532,25 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
     setBuilding(false);
   };
 
-  const activeSplit = customSplit
+  const rawSplit = customSplit
     ? customSplit.days.map((d) => ({ day: d.day, focus: d.focus, tag: d.notes, hyrox: false, exercises: d.exercises || [], warmup: customSplit.warmup, abs: customSplit.abs }))
     : SPLIT;
+  const activeSplit = applySplitEdits(rawSplit, !!customSplit);
+  const bucketName = customSplit ? "custom" : "coach";
+  const saveDayEdit = (dayName, focus, exercises) => {
+    const orig = rawSplit.find((x) => x.day === dayName);
+    if (!orig) return;
+    const bucket = { ...(edits[bucketName] || {}) };
+    bucket[dayName] = { base: daySig(orig), focus, exercises };
+    setSplitEdits({ ...edits, [bucketName]: bucket });
+    setEditDay(null);
+  };
+  const restoreDay = (dayName) => {
+    const bucket = { ...(edits[bucketName] || {}) };
+    delete bucket[dayName];
+    setSplitEdits({ ...edits, [bucketName]: bucket });
+    setEditDay(null);
+  };
 
   const PlatformLogo = getPlatform(profile.aiPlatform).Logo;
 
@@ -2284,6 +2558,11 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
     <div className="space-y-5">
       <TriBanner label="Training accountability" day={trainPctOver(1)} week={trainPctOver(7)} month={trainPctOver(30)}
         caption="Workouts checked off vs your split. 80% or higher glows green." />
+      <LogDayPicker value={logDk} what="exercise" onChange={(o) => {
+        setLogDk(o.k);
+        setEditDay(null);
+        setOpenDay(o.d.toLocaleDateString("en-US", { weekday: "long" }));
+      }} />
       <Card style={{ position: "relative", overflow: "hidden" }}>
         <div className="flex items-center justify-between" style={{ position: "relative" }}>
           <Eyebrow>{customSplit ? "Your custom split" : "Weekly split"}</Eyebrow>
@@ -2348,6 +2627,9 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                     <span style={{ ...fontDisplay, color: PAPER, fontSize: 15, letterSpacing: "0.04em" }} className="uppercase">{d.focus}</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    {d.edited && (
+                      <span style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.15em", border: `1px solid ${LINE}`, borderRadius: 99, padding: "1px 7px" }} className="uppercase">Edited</span>
+                    )}
                     {d.hyrox && (
                       <span style={{ ...fontDisplay, color: RED, fontSize: 10, letterSpacing: "0.15em" }} className="uppercase">{d.tag}</span>
                     )}
@@ -2357,7 +2639,42 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
 
                 {open && (
                   <div style={{ padding: "0 14px 14px", background: SURFACE2 }}>
-                    {d.hyrox && !customSplit ? (
+                    {(() => {
+                      const wd = (x) => x.toLocaleDateString("en-US", { weekday: "long" });
+                      const opts = logChoices();
+                      const sel = opts.find((o) => o.k === logDk) || opts[0];
+                      if (wd(sel.d) === d.day || editDay === d.day) return null;
+                      const target = opts.find((o) => o.i <= 6 && wd(o.d) === d.day);
+                      return (
+                        <div className="flex items-center justify-between gap-2 mt-2" style={{ background: SURFACE, border: `1px dashed ${LINE}`, borderRadius: 10, padding: "8px 10px" }}>
+                          <span style={{ ...fontBody, color: MUTED, fontSize: 11.5, lineHeight: 1.45 }}>
+                            Checks here count for {sel.i === 0 ? "today" : sel.d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}, not a {d.day}.
+                          </span>
+                          {target && (
+                            <button onClick={() => setLogDk(target.k)} className="uppercase"
+                              style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.1em", color: "#fff", background: RED, border: "none", borderRadius: 99, padding: "6px 10px", cursor: "pointer", flexShrink: 0 }}>
+                              Log {target.i === 0 ? "today" : target.d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" })}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {editDay !== d.day && (
+                      <div className="flex justify-end" style={{ paddingTop: 2 }}>
+                        <button onClick={() => setEditDay(d.day)} className="flex items-center gap-1 uppercase"
+                          style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", color: RED, background: "transparent", border: `1px solid ${LINE}`, borderRadius: 99, padding: "5px 10px", cursor: "pointer" }}>
+                          <Pencil size={12} color={RED} /> Edit workout
+                        </button>
+                      </div>
+                    )}
+                    {editDay === d.day ? (
+                      <>
+                        {d.hyrox && !customSplit && <HyroxCircuit snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
+                        <WorkoutEditor day={d} onCancel={() => setEditDay(null)}
+                          onSave={(focus, exercises) => saveDayEdit(d.day, focus, exercises)}
+                          onRestore={d.edited ? () => restoreDay(d.day) : null} />
+                      </>
+                    ) : d.hyrox && !customSplit ? (
                       <>
                         <HyroxCircuit snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
                         {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
@@ -2400,7 +2717,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                       </div>
                     )}
 
-                    <NoteBox label="What I actually did today" placeholder="e.g. swapped squats for leg press 4×10, added 10 min incline walk — exactly what you did goes to your coach"
+                    <NoteBox label={logDk === acctKey(new Date()) ? "What I actually did today" : `What I actually did · ${fmtShort(logDk)}`} placeholder="e.g. swapped squats for leg press 4×10, added 10 min incline walk — exactly what you did goes to your coach"
                       value={noteGet("train", d.day)} onSave={(t) => noteSet("train", d.day, t)} />
                     <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px dashed ${LINE}`, paddingTop: 10 }}>
                       <PhotoPick label="Snap this workout" onPick={(p) => addSnap("workout", p, `${d.day} — ${d.focus}`)} />
@@ -2553,7 +2870,13 @@ function SnapCard({ title, type, snaps, addSnap }) {
 /* ====================================================================== */
 /* TAB 3 — DIET                                                           */
 /* ====================================================================== */
-function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snaps, addSnap, isDone, toggleDone, noteGet, noteSet, doneLog, trainerMode }) {
+function DietTab({ profile, dietPrefs, setDietPrefs, dietPlan, setDietPlan, snaps, addSnap, isDone: isDoneAt, toggleDone: toggleDoneAt, noteGet: noteGetAt, noteSet: noteSetAt, doneLog, trainerMode }) {
+  const [logDk, setLogDk] = useState(() => acctKey(new Date()));
+  const [editPlan, setEditPlan] = useState(false);
+  const isDone = (id) => isDoneAt(id, logDk);
+  const toggleDone = (id) => toggleDoneAt(id, logDk);
+  const noteGet = (kind, key) => noteGetAt(kind, key, logDk);
+  const noteSet = (kind, key, val) => noteSetAt(kind, key, val, logDk);
   const mealKeysList = (() => {
     const keys = [];
     (dietPlan || "").split("\n").forEach((ln) => {
@@ -2637,6 +2960,9 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
       <div style={{ marginBottom: 20 }}>
         <TriBanner label="Nutrition accountability" day={mealPctOver(1)} week={mealPctOver(7)} month={mealPctOver(30)}
           caption="Meals checked off vs your plan. 80% or higher glows green." />
+        <div style={{ marginTop: 20 }}>
+          <LogDayPicker value={logDk} what="meal" onChange={(o) => setLogDk(o.k)} />
+        </div>
       </div>
     )}
     <div className="fuel-cols">
@@ -2728,7 +3054,18 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
       <div className="space-y-5">
       {dietPlan ? (
         <Card>
-          <Eyebrow>Your weekly plan</Eyebrow>
+          <div className="flex items-center justify-between gap-2">
+            <Eyebrow>Your weekly plan</Eyebrow>
+            {!editPlan && (
+              <button onClick={() => setEditPlan(true)} className="flex items-center gap-1 uppercase"
+                style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", color: RED, background: "transparent", border: `1px solid ${LINE}`, borderRadius: 99, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
+                <Pencil size={12} color={RED} /> Edit
+              </button>
+            )}
+          </div>
+          {editPlan ? (
+            <MealPlanEditor plan={dietPlan} onCancel={() => setEditPlan(false)} onSave={(t) => { setDietPlan(t); setEditPlan(false); }} />
+          ) : (<>
           <div className="mt-3">
             {dietPlan.split("\n").map((ln, i) => {
               const t = ln.trim();
@@ -2786,6 +3123,7 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
           <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 12, borderTop: `1px solid ${LINE}`, paddingTop: 10 }}>
             General guidance — always double-check labels for your allergens.
           </p>
+          </>)}
         </Card>
       ) : (
         <Card>
@@ -2863,6 +3201,7 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
   const [delId, setDelId] = useState(null);
   const touchX = useRef(null);
   const today = new Date().toISOString().slice(0, 10);
+  const [logDk, setLogDk] = useState(today);
   const todayLog = dailyLog[today] || {};
 
   const setDay = (patch) => {
@@ -2898,10 +3237,11 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
   };
 
   const toggle = (id) => {
+    const day = canLogDay(logDk) ? logDk : today;
     setCommitments(commitments.map((c) => {
       if (c.id !== id) return c;
-      const has = c.checks.includes(today);
-      return { ...c, checks: has ? c.checks.filter((d) => d !== today) : [...c.checks, today] };
+      const has = c.checks.includes(day);
+      return { ...c, checks: has ? c.checks.filter((d) => d !== day) : [...c.checks, day] };
     }));
   };
 
@@ -2998,7 +3338,7 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
 
   useAcctWindow();
   const commitPctOver = (c, n) => {
-    const createdK = acctKey(new Date(parseInt(c.id, 10) || Date.now()));
+    const createdK = [acctKey(new Date(parseInt(c.id, 10) || Date.now())), ...(c.checks || [])].sort()[0];
     let got = 0, den = 0;
     for (let i = 0; i < n; i++) {
       const d = new Date(); d.setDate(d.getDate() - i);
@@ -3144,13 +3484,15 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
 
       <WeeklyCheckIn trainerPhone={trainerPhone} profile={profile} />
 
+      {commitments.length > 0 && <LogDayPicker value={logDk} what="commitment" onChange={(o) => setLogDk(o.k)} />}
+
       {commitments.length === 0 ? (
         <Card>
           <p style={{ ...fontBody, color: MUTED, fontSize: 13 }}>No commitments yet. Tap the red + up top to add your first one — start with something you can do every single day.</p>
         </Card>
       ) : (
         commitments.map((c) => {
-          const done = c.checks.includes(today);
+          const done = c.checks.includes(logDk);
           const rOn = c.reminder?.enabled;
           const r = c.reminder || { lead: "30 min", dueTime: "18:00", dueDate: "" };
           const needsDate = r.lead === "1 day" || r.lead === "1 week";
@@ -3197,7 +3539,7 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
               </div>
               <div style={{ paddingLeft: 38 }}>
                 <NoteBox compact placeholder="Today's note for your coach (optional) — e.g. did 20 min instead of 30"
-                  value={noteGet("commits", c.id)} onSave={(t) => noteSet("commits", c.id, t)} />
+                  value={noteGet("commits", c.id, logDk)} onSave={(t) => noteSet("commits", c.id, t, logDk)} />
               </div>
 
               {/* calendar block controls */}
@@ -4367,9 +4709,9 @@ export default function App() {
   const setCalEvents = (v) => { setCalEventsState(v); sset("pt:cal-events", v); };
   const setChats = (v) => { setChatsState(v); sset("pt:chats", v, true); };
   const registeredPeople = [...new Set([...(posts || []).map((p) => p.author), "PD Coach (Payton)"])].filter((n) => n && n !== (profile.name || "").trim());
-  const noteGet = (kind, key) => ((dayNotes[new Date().toISOString().slice(0, 10)] || {})[kind] || {})[key];
-  const noteSet = (kind, key, val) => {
-    const d = new Date().toISOString().slice(0, 10);
+  const noteGet = (kind, key, dk) => ((dayNotes[dk || new Date().toISOString().slice(0, 10)] || {})[kind] || {})[key];
+  const noteSet = (kind, key, val, dk) => {
+    const d = dk && canLogDay(dk) ? dk : new Date().toISOString().slice(0, 10);
     const day = { ...(dayNotes[d] || {}) };
     const k = { ...(day[kind] || {}) };
     const empty = val == null || val === "" || (typeof val === "object" && !(val.text || "").trim());
@@ -4378,9 +4720,10 @@ export default function App() {
     setDayNotes({ ...dayNotes, [d]: day });
   };
   const todayISO = () => new Date().toISOString().slice(0, 10);
-  const isDone = (id) => !!(doneLog[todayISO()] || {})[id];
-  const toggleDone = (id) => {
-    const d = todayISO();
+  const isDone = (id, dk) => !!(doneLog[dk || todayISO()] || {})[id];
+  const toggleDone = (id, dk) => {
+    const d = dk || todayISO();
+    if (!canLogDay(d)) return; /* more than a week late — locked in */
     const day = { ...(doneLog[d] || {}) };
     if (day[id]) delete day[id]; else day[id] = true;
     setDoneLog({ ...doneLog, [d]: day });
@@ -4392,7 +4735,7 @@ export default function App() {
     const dateKey = now.toISOString().slice(0, 10);
     const done = doneLog[dateKey] || {};
     const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
-    const split = customSplit ? customSplit.days : SPLIT;
+    const split = applySplitEdits(customSplit ? customSplit.days : SPLIT, !!customSplit);
     const today = (split || []).find((x) => x.day === weekday);
     const lines = [`PD Performance check-in — ${weekday}, ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, ""];
     const items = [];
