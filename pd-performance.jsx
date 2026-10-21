@@ -3,7 +3,7 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical
+  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical, ZoomIn, ZoomOut, ChevronLeft
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -256,20 +256,23 @@ function DragList({ items, keyOf, render, onMove, mode = "insert", canDrag, hand
     if (target.closest && target.closest("input, textarea, select, [contenteditable=true], [data-no-drag]")) return false;
     if (handle && !(target.closest && target.closest("[data-drag-handle]"))) return false;
     stop();
+    const onGrip = !!(target.closest && target.closest("[data-drag-grip]"));
     const s = { i, x0: x, y0: y, x, y, active: false, isTouch };
     st.current = s;
-    if (isTouch) s.timer = setTimeout(activate, 320);
+    if (onGrip) setTimeout(activate, 0);
+    else if (isTouch) s.timer = setTimeout(activate, 260);
     const move = (cx, cy) => {
       s.x = cx; s.y = cy;
       if (!s.active) {
-        const far = Math.abs(cx - s.x0) > 8 || Math.abs(cy - s.y0) > 8;
+        if (onGrip) return;
+        const far = Math.abs(cx - s.x0) > 12 || Math.abs(cy - s.y0) > 12;
         if (isTouch && far) stop();
         else if (!isTouch && Math.abs(cy - s.y0) > 5) activate();
         return;
       }
       update();
     };
-    const onTouchMove = (ev) => { if (s.active) ev.preventDefault(); const t = ev.touches[0]; if (t) move(t.clientX, t.clientY); };
+    const onTouchMove = (ev) => { if (s.active || onGrip) ev.preventDefault(); const t = ev.touches[0]; if (t) move(t.clientX, t.clientY); };
     const onMouseMove = (ev) => move(ev.clientX, ev.clientY);
     const end = () => finish();
     window.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -320,7 +323,15 @@ function DragList({ items, keyOf, render, onMove, mode = "insert", canDrag, hand
 }
 
 /* the little grip that says "you can drag this" */
-const Grip = ({ size = 14 }) => <GripVertical size={size} color={MUTED} style={{ flexShrink: 0, opacity: 0.75 }} />;
+const Grip = ({ size = 16, hint }) => hint ? (
+  <GripVertical size={size} color={MUTED} style={{ flexShrink: 0, opacity: 0.75 }} />
+) : (
+  <span data-drag-grip aria-label="Drag to move" title="Drag to move"
+    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none", cursor: "grab",
+      padding: 8, margin: -8, borderRadius: 8, WebkitTapHighlightColor: "transparent" }}>
+    <GripVertical size={size} color={MUTED} style={{ opacity: 0.85 }} />
+  </span>
+);
 
 /* ---------- image compression (keeps storage under limits) ---------- */
 const compressImage = (file, maxW = 600, quality = 0.65) =>
@@ -1398,31 +1409,164 @@ function PhotoSlot({ label, photo, onPick, onClear, outline }) {
   );
 }
 
-function AvatarPicker({ value, name, onPick }) {
-  const ref = useRef(null);
+/* read a picked file at a size that still looks sharp after zooming in */
+const readForCrop = (file) => compressImage(file, 1400, 0.9);
+
+/* zoom + drag to frame a profile photo (pinch, slider, or mouse wheel) */
+function AvatarCropper({ src, onCancel, onSave }) {
+  const BOX = 280;
+  const [img, setImg] = useState(null);
+  const [z, setZ] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const ptrs = useRef(new Map());
+  const pinch = useRef(null);
+  useEffect(() => {
+    const im = new Image();
+    im.onload = () => setImg({ el: im, w: im.naturalWidth, h: im.naturalHeight });
+    im.src = src;
+  }, [src]);
+  const base = img ? BOX / Math.min(img.w, img.h) : 1;
+  const dw = img ? img.w * base * z : BOX, dh = img ? img.h * base * z : BOX;
+  const clamp = (p, zz = z) => {
+    if (!img) return p;
+    const w = img.w * base * zz, h = img.h * base * zz;
+    const mx = (w - BOX) / 2, my = (h - BOX) / 2;
+    return { x: Math.max(-mx, Math.min(mx, p.x)), y: Math.max(-my, Math.min(my, p.y)) };
+  };
+  const setZoom = (nz) => { const zz = Math.max(1, Math.min(5, nz)); setZ(zz); setPos((p) => clamp(p, zz)); };
+  const onDown = (e) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.current.size === 2) {
+      const [a, b] = [...ptrs.current.values()];
+      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), z };
+    }
+  };
+  const onMove = (e) => {
+    const prev = ptrs.current.get(e.pointerId);
+    if (!prev) return;
+    ptrs.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.current.size >= 2 && pinch.current) {
+      const [a, b] = [...ptrs.current.values()];
+      setZoom(pinch.current.z * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.current.d));
+    } else if (ptrs.current.size === 1) {
+      setPos((p) => clamp({ x: p.x + e.clientX - prev.x, y: p.y + e.clientY - prev.y }));
+    }
+  };
+  const onUp = (e) => { ptrs.current.delete(e.pointerId); if (ptrs.current.size < 2) pinch.current = null; };
+  const save = () => {
+    if (!img) return;
+    const OUT = 480, k = OUT / BOX;
+    const c = document.createElement("canvas");
+    c.width = OUT; c.height = OUT;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(img.el, (BOX / 2 - dw / 2 + pos.x) * k, (BOX / 2 - dh / 2 + pos.y) * k, dw * k, dh * k);
+    onSave(c.toDataURL("image/jpeg", 0.85));
+  };
   return (
-    <div className="flex items-center gap-4">
-      <input ref={ref} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          if (f) { try { onPick(await compressImage(f, 400, 0.7)); } catch { alert("Couldn't read that photo."); } }
-          e.target.value = "";
-        }} />
-      <button onClick={() => ref.current?.click()} aria-label="Set profile photo"
-        style={{ width: 74, height: 74, borderRadius: 99, overflow: "hidden", position: "relative", border: `2px solid ${LINE}`, background: SURFACE2, cursor: "pointer", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {value
-          ? <img src={value} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <span style={{ ...fontDisplay, color: RED, fontSize: 26 }}>{(name || "A")[0].toUpperCase()}</span>}
-        <span style={{ position: "absolute", bottom: 0, right: 0, background: RED, borderRadius: 99, width: 27, height: 27, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${SURFACE}` }}>
-          <Camera size={15} color="#fff" />
-        </span>
-      </button>
-      <div>
-        <div style={{ ...fontBody, color: PAPER, fontSize: 14, fontWeight: 600 }}>{name?.trim() || "Your profile"}</div>
-        <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>Tap the photo to change it</div>
+    <div style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ width: "min(360px, 100%)", background: SURFACE, border: `1px solid ${LINE}`, borderTop: `2px solid ${RED}`, borderRadius: 18, padding: 18 }}>
+        <div className="flex items-center justify-between">
+          <Eyebrow>Frame your photo</Eyebrow>
+          <button onClick={onCancel} aria-label="Cancel" style={{ background: "none", border: "none", cursor: "pointer" }}><X size={16} color={MUTED} /></button>
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 11.5, marginTop: 6, marginBottom: 12 }}>Drag to position · pinch or use the slider to zoom</p>
+        <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+          onWheel={(e) => setZoom(z * (e.deltaY < 0 ? 1.08 : 0.93))}
+          style={{ width: BOX, height: BOX, margin: "0 auto", position: "relative", overflow: "hidden", borderRadius: 14, background: "#000", touchAction: "none", cursor: "grab", userSelect: "none" }}>
+          {img && <img src={src} alt="" draggable={false}
+            style={{ position: "absolute", left: BOX / 2 - dw / 2 + pos.x, top: BOX / 2 - dh / 2 + pos.y, width: dw, height: dh, maxWidth: "none", pointerEvents: "none" }} />}
+          <div style={{ position: "absolute", inset: 0, borderRadius: "50%", boxShadow: "0 0 0 999px rgba(0,0,0,0.55)", border: "2px solid rgba(255,255,255,0.85)", pointerEvents: "none" }} />
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <button onClick={() => setZoom(z - 0.25)} aria-label="Zoom out" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><ZoomOut size={18} color={PAPER} /></button>
+          <input type="range" min="1" max="5" step="0.01" value={z} onChange={(e) => setZoom(parseFloat(e.target.value))} aria-label="Zoom"
+            style={{ flex: 1, accentColor: "#E20429" }} />
+          <button onClick={() => setZoom(z + 0.25)} aria-label="Zoom in" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><ZoomIn size={18} color={PAPER} /></button>
+        </div>
+        <div className="flex gap-2 mt-4">
+          <Btn onClick={save} disabled={!img} style={{ flex: 1, justifyContent: "center" }}><Check size={14} /> Save photo</Btn>
+          <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+        </div>
       </div>
     </div>
   );
+}
+
+/* tap a saved profile photo → it pops out big, like Instagram */
+function AvatarViewer({ src, name, onClose, onChange, onAdjust }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const t = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(t); }, []);
+  return (
+    <div onClick={onClose} role="dialog" aria-label="Profile photo"
+      style={{ position: "fixed", inset: 0, zIndex: 410, background: `rgba(0,0,0,${shown ? 0.9 : 0})`, backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, transition: "background .2s ease" }}>
+      <button onClick={onClose} aria-label="Close" style={{ position: "absolute", top: "calc(16px + env(safe-area-inset-top))", right: 16, background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 99, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <X size={18} color="#fff" />
+      </button>
+      <img src={src} alt={name ? `${name}'s profile photo` : "Profile photo"} onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(78vw, 420px)", height: "min(78vw, 420px)", objectFit: "cover", borderRadius: "50%", boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+          transform: shown ? "scale(1)" : "scale(0.55)", opacity: shown ? 1 : 0, transition: "transform .22s cubic-bezier(.2,.8,.2,1), opacity .18s ease" }} />
+      {name && <div style={{ ...fontDisplay, color: "#fff", fontSize: 18, letterSpacing: "0.08em", marginTop: 18 }} className="uppercase">{name}</div>}
+      <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
+        <Btn onClick={onChange}><Camera size={14} /> Change photo</Btn>
+        <Btn variant="ghost" onClick={onAdjust} style={{ color: "#fff", borderColor: "rgba(255,255,255,0.3)" }}><ZoomIn size={14} /> Adjust</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* pick → frame → save; used everywhere a profile photo is set */
+function useAvatarFlow(onPick) {
+  const ref = useRef(null);
+  const [cropSrc, setCropSrc] = useState(null);
+  const input = (
+    <input ref={ref} type="file" accept="image/*" style={{ display: "none" }}
+      onChange={async (e) => {
+        const f = e.target.files?.[0];
+        if (f) { try { setCropSrc(await readForCrop(f)); } catch { alert("Couldn't read that photo."); } }
+        e.target.value = "";
+      }} />
+  );
+  const cropper = cropSrc && <AvatarCropper src={cropSrc} onCancel={() => setCropSrc(null)} onSave={(d) => { onPick(d); setCropSrc(null); }} />;
+  return { pick: () => ref.current?.click(), adjust: (src) => setCropSrc(src), ui: <>{input}{cropper}</> };
+}
+
+function AvatarPicker({ value, name, onPick }) {
+  const flow = useAvatarFlow(onPick);
+  const [viewing, setViewing] = useState(false);
+  return (
+    <div className="flex items-center gap-4">
+      {flow.ui}
+      <div style={{ position: "relative", width: 74, height: 74, flexShrink: 0 }}>
+        <button onClick={() => (value ? setViewing(true) : flow.pick())} aria-label={value ? "View profile photo" : "Set profile photo"}
+          style={{ width: 74, height: 74, borderRadius: 99, overflow: "hidden", border: `2px solid ${LINE}`, background: SURFACE2, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {value
+            ? <img src={value} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <span style={{ ...fontDisplay, color: RED, fontSize: 26 }}>{(name || "A")[0].toUpperCase()}</span>}
+        </button>
+        <button onClick={flow.pick} aria-label={value ? "Change profile photo" : "Add profile photo"}
+          style={{ position: "absolute", bottom: -2, right: -2, background: RED, borderRadius: 99, width: 29, height: 29, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${SURFACE}`, cursor: "pointer", padding: 0 }}>
+          <Camera size={15} color="#fff" />
+        </button>
+      </div>
+      <div>
+        <div style={{ ...fontBody, color: PAPER, fontSize: 14, fontWeight: 600 }}>{name?.trim() || "Your profile"}</div>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{value ? "Tap your photo to view it · camera to change" : "Tap to add a profile photo"}</div>
+      </div>
+      {viewing && value && (
+        <AvatarViewer src={value} name={name?.trim()} onClose={() => setViewing(false)}
+          onChange={() => { setViewing(false); flow.pick(); }}
+          onAdjust={() => { setViewing(false); flow.adjust(value); }} />
+      )}
+    </div>
+  );
+}
+
+/* compact "change photo" button for menus — same frame-and-zoom flow */
+function AvatarChangeButton({ label, onPick }) {
+  const flow = useAvatarFlow(onPick);
+  return (<>{flow.ui}<Btn variant="ghost" onClick={flow.pick}><ImagePlus size={14} /> {label}</Btn></>);
 }
 
 const GRID_HINTS = [["Goal", "Post your goals"], ["Progress", "Share your progress"], ["Meal", "Log your meals"], ["Workout", "Post a workout"], ["Thought", "Drop a thought"], ["Goal", "Anything on your mind"]];
@@ -2390,7 +2534,7 @@ function ExerciseList({ exercises, snaps, addSnap, dayLabel, isDone, toggleDone,
       <DragList items={groups} keyOf={(g, i) => `${i}:${g.map((x) => x.name).join("|")}`}
         onMove={(a, b) => onReorder(flattenGroups(moveItem(groups, a, b)))}
         render={(g) => block(g)} />
-      <div style={{ ...fontBody, color: MUTED, fontSize: 10.5, marginTop: 6, textAlign: "center" }}>Hold an exercise or superset to drag it into a new spot</div>
+      <div className="flex items-center justify-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 10.5, marginTop: 6 }}>Drag <Grip hint size={12} /> to reorder exercises and supersets</div>
     </div>
   );
 }
@@ -2558,38 +2702,54 @@ function MealPlanEditor({ plan, onSave, onCancel }) {
 
 /* ---------- "logging for" day picker — log up to 7 days late at full credit ---------- */
 function LogDayPicker({ value, onChange, what }) {
-  const opts = logChoices();
-  const sel = opts.find((o) => o.k === value) || opts[0];
-  const row = useRef(null);
-  useEffect(() => { const el = row.current; if (el) el.scrollLeft = el.scrollWidth; }, []);
+  const [weekOff, setWeekOff] = useState(0);
+  const strip = (off) => {
+    const now = new Date();
+    const endDelta = ((7 - now.getDay()) % 7) - 7 * off; /* next Sunday on/after today */
+    return [...Array(8)].map((_, i) => {
+      const delta = endDelta - 7 + i;
+      const d = new Date(); d.setDate(d.getDate() + delta);
+      const back = -delta;
+      return { d, k: acctKey(d), i: back, ok: back >= 0 && back <= LATE_DAYS };
+    });
+  };
+  const days = strip(weekOff);
+  const canPrev = strip(weekOff + 1).some((o) => o.ok);
+  const sel = days.find((o) => o.k === value) || logChoices().find((o) => o.k === value) || logChoices()[0];
+  const fmt = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const arrow = (dis) => ({ background: "transparent", border: `1px solid ${LINE}`, borderRadius: 99, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: dis ? "default" : "pointer", opacity: dis ? 0.3 : 1, padding: 0 });
   return (
     <Card style={{ padding: 14 }}>
       <div className="flex items-center justify-between gap-2">
         <Eyebrow>Logging for</Eyebrow>
-        <span style={{ ...fontBody, color: MUTED, fontSize: 11 }}>Catch up to 7 days late</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => canPrev && setWeekOff(weekOff + 1)} disabled={!canPrev} aria-label="Previous week" style={arrow(!canPrev)}><ChevronLeft size={15} color={PAPER} /></button>
+          <span style={{ ...fontMono, color: MUTED, fontSize: 10.5, whiteSpace: "nowrap" }}>{fmt(days[0].d)} – {fmt(days[7].d)}</span>
+          <button onClick={() => weekOff > 0 && setWeekOff(weekOff - 1)} disabled={weekOff === 0} aria-label="Next week" style={arrow(weekOff === 0)}><ChevronRight size={15} color={PAPER} /></button>
+        </div>
       </div>
-      <div ref={row} className="flex gap-2 mt-3" style={{ overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
-        {[...opts].reverse().map((o) => {
-          const on = o.k === sel.k;
-          const lab = o.i === 0 ? "Today" : o.i === 1 ? "Yest." : o.d.toLocaleDateString("en-US", { weekday: "short" });
+      <div className="mt-3" style={{ display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 4 }}>
+        {days.map((o) => {
+          const on = o.ok && o.k === sel.k;
           return (
-            <button key={o.k} onClick={() => onChange(o)} aria-pressed={on}
-              style={{ flexShrink: 0, minWidth: 54, textAlign: "center", padding: "7px 8px", borderRadius: 12, cursor: "pointer",
-                background: on ? RED : "transparent", border: `1px solid ${on ? RED : LINE}`, color: on ? "#fff" : PAPER }}>
-              <div style={{ ...fontDisplay, fontSize: 11, letterSpacing: "0.08em" }} className="uppercase">{lab}</div>
-              <div style={{ ...fontMono, fontSize: 10, opacity: 0.8, marginTop: 1 }}>{o.d.getMonth() + 1}/{o.d.getDate()}</div>
+            <button key={o.k} onClick={() => o.ok && onChange(o)} disabled={!o.ok} aria-pressed={on}
+              title={o.i < 0 ? "Not here yet" : !o.ok ? "More than 7 days ago — locked" : undefined}
+              style={{ minWidth: 0, textAlign: "center", padding: "7px 0 6px", borderRadius: 10, cursor: o.ok ? "pointer" : "default",
+                background: on ? RED : "transparent", border: `1px solid ${on ? RED : LINE}`, color: on ? "#fff" : PAPER, opacity: o.ok ? 1 : 0.32 }}>
+              <div style={{ ...fontDisplay, fontSize: 10, letterSpacing: "0.04em" }} className="uppercase">{o.d.toLocaleDateString("en-US", { weekday: "short" })}</div>
+              <div style={{ ...fontMono, fontSize: 10.5, marginTop: 1 }}>{o.d.getDate()}</div>
+              <div style={{ width: 4, height: 4, borderRadius: 99, margin: "3px auto 0", background: o.i === 0 ? (on ? "#fff" : RED) : "transparent" }} />
             </button>
           );
         })}
       </div>
-      {sel.i > 0 && (
+      {sel.i > 0 ? (
         <p style={{ ...fontBody, color: PAPER, fontSize: 11.5, marginTop: 10, marginBottom: 0, borderLeft: `2px solid ${RED}`, paddingLeft: 8, lineHeight: 1.5 }}>
           Back-logging {sel.d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} — every {what} you check counts for that day at full credit.
         </p>
-      )}
-      {sel.i === 0 && (
+      ) : (
         <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8, marginBottom: 0, lineHeight: 1.5 }}>
-          Forgot to log a day? Tap it above. After 7 days it locks in.
+          Red dot = today. Forgot a day? Tap it — you can catch up to 7 days late.
         </p>
       )}
     </Card>
@@ -2844,7 +3004,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
         )}
 
         <div className="flex items-center justify-between gap-2 mt-4" style={{ ...fontBody, color: MUTED, fontSize: 11 }}>
-          <span className="flex items-center gap-1"><Grip size={12} /> Hold a day and drop it on another to swap them</span>
+          <span className="flex items-center gap-1">Drag <Grip hint size={12} /> onto another day to switch them</span>
           {anyMoved && (
             <button onClick={resetOrder} className="flex items-center gap-1" style={{ ...fontBody, color: RED, fontSize: 11, background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
               <RotateCcw size={11} /> Reset week order
@@ -2865,8 +3025,8 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                     <span style={{ ...fontDisplay, color: PAPER, fontSize: 15, letterSpacing: "0.04em" }} className="uppercase">{d.focus}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {(d.edited || d.moved) && (
-                      <span style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.15em", border: `1px solid ${LINE}`, borderRadius: 99, padding: "1px 7px" }} className="uppercase">{d.moved ? `From ${d.src.slice(0, 3)}` : "Edited"}</span>
+                    {d.edited && (
+                      <span style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.15em", border: `1px solid ${LINE}`, borderRadius: 99, padding: "1px 7px" }} className="uppercase">Edited</span>
                     )}
                     {d.hyrox && (
                       <span style={{ ...fontDisplay, color: RED, fontSize: 10, letterSpacing: "0.15em" }} className="uppercase">{d.tag}</span>
@@ -3360,7 +3520,7 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
             <MealPlanEditor plan={dietPlan} onCancel={() => setEditPlan(false)} onSave={(t) => { setDietPlan(t); setEditPlan(false); }} />
           ) : (<>
           <div className="mt-3">
-            <div className="flex items-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: 6 }}><Grip size={12} /> Hold a meal to drag it to a new spot</div>
+            <div className="flex items-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: 6 }}>Drag <Grip hint size={12} /> to move a meal</div>
             <DragList items={dietPlan.split("\n").map((x) => x.trim()).filter(Boolean)} gap={0} keyOf={(t, i) => `${i}:${t}`}
               canDrag={(t) => isPlanMeal(t)}
               onMove={(a, b) => {
@@ -3380,7 +3540,7 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
                 const mealSnaps = (snaps || []).filter((x) => x.type === "meal" && x.label === mealKey).slice(0, 4);
                 return (
                   <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
-                    <span style={{ float: "right", marginLeft: 6 }}><Grip size={13} /></span>
+                    <span style={{ float: "right", marginLeft: 10, marginTop: 2 }}><Grip /></span>
                     <span style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 600 }}>{ci > 0 ? t.slice(0, ci + 1) : ""} </span>
                     <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6 }}>{ci > 0 ? t.slice(ci + 1) : t}</span>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -3794,7 +3954,7 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
         </Card>
       ) : (
         <>
-        <div className="flex items-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: -8 }}><Grip size={12} /> Hold a commitment's title to drag it</div>
+        <div className="flex items-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: -8 }}>Drag <Grip hint size={12} /> to reorder commitments</div>
         <DragList items={commitments} handle gap={20} keyOf={(c) => c.id}
           onMove={(a, b) => setCommitments(moveItem(commitments, a, b))}
           render={(c) => {
@@ -5371,7 +5531,7 @@ export default function App() {
             {session.provider === "pin" ? `Personal space · ${session.name || "client"}` : `Signed in${session.provider !== "guest" ? ` with ${session.provider === "google" ? "Google" : "Apple"}` : " as guest"}`}
           </div>
           <div className="space-y-2">
-            <PhotoPick label={profile.avatar ? "Change photo" : "Set profile photo"} icon={ImagePlus}
+            <AvatarChangeButton label={profile.avatar ? "Change photo" : "Set profile photo"}
               onPick={(p) => { setProfile({ ...profile, avatar: p }); }} />
             <Btn variant="ghost" onClick={() => { toggleTrainer(); setShowAccount(false); }} style={{ width: "100%", justifyContent: "center" }}>
               {trainerMode ? <Unlock size={14} /> : <Lock size={14} />} {trainerMode ? "Exit trainer mode" : "Trainer / Trainee sign-in"}
