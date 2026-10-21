@@ -3,7 +3,7 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical, ZoomIn, ZoomOut, ChevronLeft
+  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical, ZoomIn, ZoomOut, ChevronLeft, Mic
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -2074,10 +2074,10 @@ function trainItemsFor(weekday, customSplit) {
   const split = applySplitEdits(customSplit ? customSplit.days : SPLIT, !!customSplit);
   const today = (split || []).find((x) => x.day === weekday);
   const hasEx = !!(today && today.exercises && today.exercises.length);
-  const hyrox = !!(today && today.hyrox && !customSplit);
+  const hyrox = !!(today && today.hyrox);
   if (!hasEx && !hyrox && (weekday === "Sunday" || !today || /rest/i.test(today.focus || ""))) return [];
   if (customSplit && !today) return [];
-  const legDay = !customSplit && !!today && (today.src === "Monday" || today.src === "Thursday");
+  const legDay = !!today && (!customSplit ? (today.src === "Monday" || today.src === "Thursday") : (!!today.hyrox || /\bleg/i.test(today.focus || "")));
   const extras = (cardioAbs.hidden ? [] : cardioAbs.items || []).filter((x) => !(x.skipLeg && legDay));
   const items = extras.filter((x) => x.at === "start").map((x) => x.id);
   if (hyrox) HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
@@ -2807,7 +2807,7 @@ function downloadSplitPdf(activeSplit, isCustom, light, preview) {
     "pd / performance · Swap any exercise for a similar one that hits the same muscle — these are guidelines to look, feel, and perform better. Intensity and consistency matter most.", light);
   activeSplit.forEach((d) => {
     pdfLine(st, `${d.day.toUpperCase()} — ${d.focus.toUpperCase()}`, { red: true, bold: true, size: 12, gap: 4 });
-    if (d.hyrox && !isCustom) {
+    if (d.hyrox) {
       HYROX.forEach((h) => pdfLine(st, `Run ${h.run} -> ${h.station} · ${h.detail}`, { indent: true, bullet: true, gap: 3 }));
     }
     if (d.exercises && d.exercises.length) {
@@ -2841,6 +2841,288 @@ function downloadDietPdf(dietPlan, prefs, profile, light, preview) {
   });
   if (preview) return st.doc.output("bloburl");
   st.doc.save("pd-meal-plan.pdf");
+}
+
+/* ---------- voice → split: turn spoken directions into a weekly split (works offline) ---------- */
+const VP_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const VP_NUM = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60 };
+const VP_FOCUS = new Set(["chest", "back", "legs", "leg", "shoulders", "shoulder", "arms", "arm", "biceps", "bicep", "triceps", "tricep", "bis", "tris", "push", "pull", "upper", "lower", "body", "full", "cardio", "hyrox", "crossfit", "conditioning", "glutes", "glute", "hamstrings", "quads", "core", "abs", "delts", "traps", "lats", "calves", "light", "heavy", "and", "&", "plus", "day", "a", "the", "is", "be", "will", "it's", "its", "for", "do", "focus", "workout", "session", "power", "strength", "endurance", "mobility", "hiit", "run", "running", "engine"]);
+const VP_FILL = /^(?:(?:and|then|next|so|okay|ok|um|uh|also|after that|followed by|start(?:ing)? (?:off )?with|begin(?:ning)? with|first(?: up)?|finish(?:ing)? (?:off )?with|end(?:ing)? with|last(?:ly)?|i want(?: to do)?|i'd like(?: to do)?|let's do|lets do|we'll do|we will do|we're doing|gonna do|going to do|do|does|doing|some|a|an|the|for|of|with|go|hit)\b[\s,.:;-]*)+/i;
+const VP_TAIL = /[\s,.:;-]*\b(?:and|then|for|of|with|at|to|on|each|reps?|sets?)\s*$/i;
+
+function vpNorm(t) {
+  let s = ` ${String(t || "").toLowerCase()} `
+    .replace(/[“”"]/g, " ")
+    .replace(/(\d)\s*[x×]\s*(\d)/g, "$1 by $2")
+    .replace(/\b(\d+)\s*-\s*(\d+)\b/g, "$1 to $2")
+    .replace(/\b(?:super set|super-set|supersetted|super setted)\b/g, "superset");
+  s = s.replace(/\b([a-z]+)\b/g, (w) => (w in VP_NUM ? String(VP_NUM[w]) : w));
+  s = s.replace(/\b(20|30|40|50|60) ([1-9])\b/g, (_, a, b) => String(+a + +b));
+  return s.replace(/\s+/g, " ").trim();
+}
+const vpTitle = (n) => n.replace(/\s+/g, " ").trim().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(Db|Rdl|Ez|Bb)\b/g, (m) => m.toUpperCase());
+const vpClean = (n) => {
+  let x = n.replace(/[,.;:!?]/g, " ").replace(/\s+/g, " ").trim();
+  let prev;
+  do { prev = x; x = x.replace(VP_FILL, "").replace(VP_TAIL, "").trim(); } while (x !== prev);
+  return x;
+};
+/* sets/reps phrases: "4 sets of 8 to 12", "3 by 10", "3 sets 12 reps", "12 reps", "to failure" */
+const VP_SR = /\b(?:for\s+)?(?:(\d+)\s*(?:sets?|rounds?)\s*(?:of\s*|by\s*|at\s*|for\s*|with\s*)?(?:(\d+)(?:\s*(?:to|through|or)\s*(\d+))?\s*(?:reps?|repetitions)?|(?:to\s+)?failure)|(\d+)\s*by\s*(\d+)(?:\s*(?:to|or)\s*(\d+))?\s*(?:reps?)?|(\d+)(?:\s*(?:to|or)\s*(\d+))?\s*(?:reps?|repetitions)|(\d+)\s*(?:min(?:ute)?s?|miles?|mi)|(to failure))\b/g;
+
+function vpParseDay(text) {
+  let s = text.trim().replace(/^(?:[,.:;-]|\b(?:i want to do|i want to|i want|i'd like to do|let's do|lets do|we'll do|we will do|i'll do|gonna be|going to be|it's|its|is|will be|do|we're doing|i'm doing|doing)\b)\s*/g, "").trim();
+  /* focus = leading run of body-part / training words */
+  const words = s.split(" ");
+  let k = 0;
+  while (k < words.length && VP_FOCUS.has(words[k].replace(/[,.:;]/g, ""))) k++;
+  let focusWords = words.slice(0, k).filter((w) => !/^(is|be|will|it's|its|do|for|a|the)$/.test(w.replace(/[,.:;]/g, "")));
+  while (focusWords.length && /^(and|&|plus|day)$/.test(focusWords[focusWords.length - 1].replace(/[,.:;]/g, ""))) {
+    if (/^day$/.test(focusWords[focusWords.length - 1].replace(/[,.:;]/g, ""))) break;
+    focusWords.pop();
+  }
+  let focus = focusWords.join(" ").replace(/[,.:;]/g, "").replace(/\bday\b\s*$/, "").replace(/\s+/g, " ").trim();
+  if (focus.split(" ").length > 6) focus = "";
+  const rest = words.slice(k).join(" ");
+  const isRest = /\b(rest|off|recovery|recover|nothing|chill)\b/.test(s) && !/\d/.test(rest);
+  if (isRest && !VP_SR.test(rest)) { VP_SR.lastIndex = 0; return { focus: "Rest", exercises: [] }; }
+  VP_SR.lastIndex = 0;
+
+  /* walk the sets/reps phrases: the words before each one name an exercise */
+  const ex = [];
+  let last = 0, m;
+  const chunks = [];
+  while ((m = VP_SR.exec(rest))) {
+    chunks.push({ name: rest.slice(last, m.index), m });
+    last = m.index + m[0].length;
+  }
+  if (rest.slice(last).trim()) chunks.push({ name: rest.slice(last), m: null });
+  /* names with no numbers but split by "then"/commas become separate exercises */
+  for (let i = 0; i < chunks.length - 1; i++) {
+    if (!vpClean(chunks[i].name) && chunks[i].m && !chunks[i + 1].m) { chunks[i + 1].m = chunks[i].m; chunks[i].m = null; }
+  }
+  const expanded = [];
+  chunks.forEach((c) => {
+    const parts = c.name.split(/,|\bthen\b|\bnext\b|\bfollowed by\b|\bafter that\b|\band then\b/).map((x) => x.trim()).filter(Boolean);
+    if (!parts.length) { if (c.m && expanded.length) expanded[expanded.length - 1].m = expanded[expanded.length - 1].m || c.m; return; }
+    parts.forEach((p, i) => expanded.push({ name: p, m: i === parts.length - 1 ? c.m : null }));
+  });
+  const sr = (mm) => {
+    if (!mm) return { sets: 3, reps: "10–12" };
+    if (/failure/.test(mm[0]) && !mm[2]) return { sets: +(mm[1] || 3), reps: "to failure" };
+    if (mm[1]) return { sets: +mm[1], reps: mm[2] ? (mm[3] ? `${mm[2]}–${mm[3]}` : mm[2]) : "10–12" };
+    if (mm[4]) return { sets: +mm[4], reps: mm[6] ? `${mm[5]}–${mm[6]}` : mm[5] };
+    if (mm[7]) return { sets: 3, reps: mm[8] ? `${mm[7]}–${mm[8]}` : mm[7] };
+    if (mm[9]) return { sets: 1, reps: mm[0].replace(/^for\s+/, "").trim() };
+    if (mm[10]) return { sets: 3, reps: "to failure" };
+    return { sets: 3, reps: "10–12" };
+  };
+  expanded.forEach((c) => {
+    let raw = c.name.trim();
+    const { sets, reps } = sr(c.m);
+    /* "superset X with/and Y" · "X superset with Y" · "superset with Y" (links to previous) */
+    const lead = raw.match(/^(?:.*?\b)?superset(?:ted)?\b\s*(?:it\s*)?(.*)$/);
+    if (/\bsuperset/.test(raw)) {
+      const before = raw.split(/\bsuperset(?:ted)?\b/)[0];
+      const after = raw.split(/\bsuperset(?:ted)?\b/).slice(1).join(" ");
+      const bClean = vpClean(before);
+      const afterParts = after.replace(/^\s*(?:it\s*)?(?:with|and|to)\b/, "").split(/\bwith\b|\band\b/).map(vpClean).filter(Boolean);
+      const names = [];
+      if (!afterParts.length && bClean) {
+        names.push(...before.replace(/\b(?:as|in|for)\s+a\s*$/, "").split(/\band\b|\bwith\b/).map(vpClean).filter(Boolean));
+      } else {
+        if (bClean) names.push(bClean);
+        names.push(...afterParts);
+      }
+      if (!bClean && afterParts.length === 1 && ex.length) {
+        ex[ex.length - 1].ss = true;
+        ex.push({ name: vpTitle(afterParts[0]), sets, reps, note: "", ss: false });
+        return;
+      }
+      if (names.length === 1 && ex.length) { ex[ex.length - 1].ss = true; ex.push({ name: vpTitle(names[0]), sets, reps, note: "", ss: false }); return; }
+      names.forEach((n, i) => ex.push({ name: vpTitle(n), sets, reps, note: "", ss: i < names.length - 1 }));
+      return;
+    }
+    const asSS = raw.match(/^(.*)\b(?:as a|in a)\s+superset\b/);
+    const name = vpClean(raw);
+    if (!name || name.length < 3) {
+      if (ex.length && c.m) { const p = ex[ex.length - 1]; p.sets = sets; p.reps = reps; }
+      return;
+    }
+    ex.push({ name: vpTitle(name), sets, reps, note: "", ss: false });
+  });
+  return { focus: focus ? vpTitle(focus.replace(/\bbis\b/, "biceps").replace(/\btris\b/, "triceps")).replace(/\s+(?:And|&|Plus)\s+/g, " & ") : "", exercises: ex };
+}
+
+/* full transcript → { days: { Monday: {...} }, mentioned: [...] } */
+function parseSpokenSplit(transcript) {
+  const s = vpNorm(transcript);
+  const re = /\b(?:on\s+)?(mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?)\b/g;
+  const hits = [];
+  let m;
+  while ((m = re.exec(s))) {
+    if (/(?:same as|like|copy|repeat|as)\s*$/.test(s.slice(Math.max(0, m.index - 12), m.index))) continue;
+    hits.push({ day: m[1].replace(/s$/, ""), start: m.index, end: m.index + m[0].length });
+  }
+  const out = {};
+  hits.forEach((h, i) => {
+    const seg = s.slice(h.end, i + 1 < hits.length ? hits[i + 1].start : s.length).replace(/^[\s,.:;-]*(?:is|will be|i'll do|we'll do|do|:)?\s*/, "").trim();
+    const day = h.day[0].toUpperCase() + h.day.slice(1);
+    if ((!seg || /^(?:and|&|plus|or|,)$/.test(seg)) && i + 1 < hits.length) { out[day] = { sameAsNext: true }; return; }
+    const same = seg.match(/^(?:same as|repeat|copy|again like)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/);
+    if (same) { out[day] = { sameAs: same[1][0].toUpperCase() + same[1].slice(1) }; return; }
+    const parsed = vpParseDay(seg);
+    if (out[day] && out[day].exercises) { out[day].exercises.push(...parsed.exercises); if (!out[day].focus) out[day].focus = parsed.focus; }
+    else out[day] = parsed;
+  });
+  /* "monday and thursday legs …" → both days share it */
+  const names = Object.keys(out);
+  for (let i = names.length - 1; i >= 0; i--) {
+    const d = names[i];
+    if (out[d].sameAsNext) { const nxt = names[i + 1]; out[d] = nxt ? { ...out[nxt], exercises: (out[nxt].exercises || []).map((x) => ({ ...x })) } : { focus: "", exercises: [] }; }
+  }
+  names.forEach((d) => {
+    if (out[d].sameAs && out[out[d].sameAs]) { const src = out[out[d].sameAs]; out[d] = { focus: src.focus, exercises: (src.exercises || []).map((x) => ({ ...x })) }; }
+    else if (out[d].sameAs) out[d] = { focus: "", exercises: [], sameAsCurrent: out[d].sameAs };
+  });
+  return { days: out, mentioned: names };
+}
+
+
+/* turn a parsed voice transcript into a full 7-day split */
+function buildVoiceSplit(parsed, currentDays, keepOthers) {
+  return VP_DAYS.map((day) => {
+    const p = parsed.days[day];
+    const cur = (currentDays || []).find((d) => d.day === day);
+    const copy = (c) => ({ day, focus: c?.focus || "Rest", notes: "", hyrox: !!c?.hyrox, tag: c?.hyrox ? c.tag : undefined, exercises: (c?.exercises || []).map((x) => ({ ...x })) });
+    if (p && p.sameAsCurrent) return copy((currentDays || []).find((d) => d.day === p.sameAsCurrent));
+    if (p) {
+      const ex = p.exercises || [];
+      return { day, focus: p.focus || (ex.length === 1 ? ex[0].name : ex.length ? "Workout" : "Rest"), notes: "", exercises: ex };
+    }
+    if (keepOthers && cur) return copy(cur);
+    return { day, focus: "Rest", notes: "", exercises: [] };
+  });
+}
+
+/* ---------- talk through your split: dictate → preview → apply ---------- */
+function VoiceSplitBuilder({ currentDays, onApply, aiPlatform }) {
+  const SR = typeof window !== "undefined" ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+  const [text, setText] = useState("");
+  const [listening, setListening] = useState(false);
+  const [err, setErr] = useState("");
+  const [keep, setKeep] = useState(true);
+  const rec = useRef(null);
+  const committed = useRef("");
+  const wantOn = useRef(false);
+  const startRec = () => {
+    if (!SR) return;
+    setErr("");
+    const r = new SR();
+    r.lang = navigator.language || "en-US";
+    r.continuous = true;
+    r.interimResults = true;
+    r.onresult = (e) => {
+      let session = "";
+      for (let i = 0; i < e.results.length; i++) session += e.results[i][0].transcript + (e.results[i].isFinal ? " " : "");
+      setText(`${committed.current}${session}`.replace(/\s+/g, " ").trimStart());
+    };
+    r.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") { setErr("Microphone is blocked — allow mic access for this site, or tap the text box and use the 🎤 on your keyboard."); wantOn.current = false; }
+      else if (e.error !== "no-speech" && e.error !== "aborted") setErr("Voice paused — tap the mic to keep going.");
+    };
+    r.onend = () => {
+      setText((t) => { committed.current = t ? `${t.trim()} ` : ""; return t; });
+      if (wantOn.current) { try { r.start(); return; } catch (x) {} }
+      setListening(false);
+    };
+    rec.current = r;
+    wantOn.current = true;
+    try { r.start(); setListening(true); } catch (x) { setErr("Couldn't start the mic — try again."); }
+  };
+  const stopRec = () => { wantOn.current = false; try { rec.current && rec.current.stop(); } catch (x) {} setListening(false); };
+  useEffect(() => () => { wantOn.current = false; try { rec.current && rec.current.abort(); } catch (x) {} }, []);
+  const toggle = () => {
+    if (listening) { stopRec(); return; }
+    committed.current = text ? `${text.trim()} ` : "";
+    startRec();
+  };
+  const parsed = text.trim() ? parseSpokenSplit(text) : { days: {}, mentioned: [] };
+  const preview = parsed.mentioned.length ? buildVoiceSplit(parsed, currentDays, keep) : [];
+  const platform = getPlatform(aiPlatform);
+  const PLogo = platform.Logo;
+  const aiPrompt = `Act as my PD Performance coach. Here are my spoken directions for my weekly training split (voice-transcribed, so expect a few typos):\n"""${text.trim()}"""\nOrganize them into a complete 7-day split and write out every workout: exercises in order, sets x reps, and which exercises are supersets (the first exercise of a session is usually solo). Keep everything I asked for and fill any gaps sensibly.\nThen output the split once as a single JSON code block in exactly this shape: {"summary":"why this split fits","days":[{"day":"Monday","focus":"Chest & Biceps","notes":"one short line","exercises":[{"name":"Incline dumbbell press","sets":4,"reps":"8–12","note":"","ss":false}]}]} — "ss": true means it's supersetted with the NEXT exercise. Include all 7 days; rest days get "focus":"Rest" and an empty exercises list.\nFinish by telling me to copy that JSON, open https://pdrayday.github.io/pd-performance/ on the Train tab, tap "Refresh from AI", paste it, and hit "Apply to app".`;
+  return (
+    <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 14 }}>
+      <div className="flex items-center gap-3">
+        <button onClick={SR ? toggle : undefined} aria-label={listening ? "Stop recording" : "Record your split"} disabled={!SR}
+          style={{ width: 52, height: 52, borderRadius: 99, flexShrink: 0, border: "none", cursor: SR ? "pointer" : "default", background: listening ? "#fff" : RED,
+            display: "flex", alignItems: "center", justifyContent: "center", opacity: SR ? 1 : 0.4,
+            boxShadow: listening ? "0 0 0 6px rgba(226,4,41,0.35), 0 0 0 12px rgba(226,4,41,0.15)" : "0 4px 14px rgba(226,4,41,0.4)", transition: "box-shadow .3s ease" }}>
+          {listening ? <span style={{ width: 16, height: 16, borderRadius: 3, background: RED }} /> : <Mic size={22} color="#fff" />}
+        </button>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontDisplay, color: PAPER, fontSize: 14, letterSpacing: "0.08em" }} className="uppercase">{listening ? "Listening… tap to stop" : "Talk through your split"}</div>
+          <div style={{ ...fontBody, color: MUTED, fontSize: 11.5, lineHeight: 1.45 }}>
+            {SR ? "Say each day, then the exercises with sets × reps and any supersets." : "Tap the box below and use the 🎤 on your keyboard to dictate."}
+          </div>
+        </div>
+      </div>
+      <textarea value={text} onChange={(e) => { setText(e.target.value); committed.current = e.target.value ? `${e.target.value.trim()} ` : ""; }}
+        rows={4} placeholder={"e.g. “Monday chest and biceps: incline dumbbell press 4 sets of 8 to 12, then superset flat bench with barbell curls 4 sets of 10. Tuesday back and triceps… Sunday rest.”"}
+        style={{ ...inputStyle, marginTop: 12, resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
+      {err && <p style={{ ...fontBody, color: RED, fontSize: 11.5, margin: "6px 0 0" }}>{err}</p>}
+      {preview.length > 0 && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between gap-2">
+            <span style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.16em" }} className="uppercase">Preview</span>
+            <label className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 11.5, cursor: "pointer" }}>
+              <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Keep days I didn't mention
+            </label>
+          </div>
+          <div className="mt-2 space-y-2">
+            {preview.map((d) => {
+              const said = parsed.mentioned.includes(d.day);
+              const groups = exerciseGroups(d.exercises);
+              return (
+                <div key={d.day} style={{ background: SURFACE2, border: `1px solid ${said ? RED : LINE}`, borderRadius: 10, padding: "8px 10px", opacity: said ? 1 : 0.6 }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span style={{ ...fontDisplay, color: PAPER, fontSize: 12.5, letterSpacing: "0.06em" }} className="uppercase">
+                      <span style={{ ...fontMono, color: MUTED, fontSize: 10.5, marginRight: 8 }}>{d.day.slice(0, 3).toUpperCase()}</span>{d.focus}
+                    </span>
+                    {!said && <span style={{ ...fontBody, color: MUTED, fontSize: 10 }}>{keep ? "unchanged" : "rest"}</span>}
+                  </div>
+                  {said && groups.length > 0 && (
+                    <div className="mt-1">
+                      {groups.map((g, gi) => (
+                        <div key={gi} style={{ borderLeft: g.length > 1 ? `2px solid ${RED}` : "none", paddingLeft: g.length > 1 ? 8 : 0, margin: "4px 0" }}>
+                          {g.length > 1 && <div style={{ ...fontDisplay, color: RED, fontSize: 8.5, letterSpacing: "0.16em" }}>SUPERSET</div>}
+                          {g.map((x, xi) => (
+                            <div key={xi} className="flex justify-between gap-2" style={{ ...fontBody, fontSize: 12, color: PAPER }}>
+                              <span>{x.name}</span><span style={{ ...fontMono, color: RED, whiteSpace: "nowrap" }}>{x.sets} × {x.reps}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>Anything not quite right? Fix the text above, or apply and tweak any day with Edit workout.</p>
+        </div>
+      )}
+      <div className="flex gap-2 flex-wrap mt-3">
+        <Btn onClick={() => { if (listening) stopRec(); onApply(buildVoiceSplit(parsed, currentDays, keep)); setText(""); committed.current = ""; }} disabled={!preview.length}>
+          <Check size={14} /> Apply to my split
+        </Btn>
+        <Btn variant="ghost" disabled={!text.trim()} onClick={() => window.open(aiLink(aiPlatform, aiPrompt), "_blank")}>
+          <PLogo s={14} /> Have {platform.name} write it out
+        </Btn>
+      </div>
+    </div>
+  );
 }
 
 function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, setCustomSplit, profile, snaps, addSnap, isDone: isDoneAt, toggleDone: toggleDoneAt, noteGet: noteGetAt, noteSet: noteSetAt, doneLog }) {
@@ -2903,7 +3185,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
   };
 
   const rawSplit = customSplit
-    ? customSplit.days.map((d) => ({ day: d.day, focus: d.focus, tag: d.notes, hyrox: false, exercises: d.exercises || [], warmup: customSplit.warmup, abs: customSplit.abs }))
+    ? customSplit.days.map((d) => ({ day: d.day, focus: d.focus, tag: d.hyrox ? (d.tag || "HYROX / CROSSFIT") : d.notes, hyrox: !!d.hyrox, exercises: d.exercises || [], warmup: customSplit.warmup, abs: customSplit.abs }))
     : SPLIT;
   const activeSplit = applySplitEdits(rawSplit, !!customSplit);
   const bucketName = customSplit ? "custom" : "coach";
@@ -2968,6 +3250,15 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
 
         {showBuilder && (
           <div className="mt-4 space-y-3" style={{ background: SURFACE2, borderRadius: 12, padding: 14, border: `1px solid ${LINE}` }}>
+            <VoiceSplitBuilder currentDays={activeSplit} aiPlatform={profile.aiPlatform} onApply={(days) => {
+              const cur = splitEdits;
+              setSplitEdits({ ...cur, custom: {} });
+              setCustomSplit({ summary: "Built from your voice directions — tweak any day with Edit workout.", days });
+              setShowBuilder(false);
+              setEditDay(null);
+              setOpenDay(null);
+            }} />
+            <div style={{ ...fontDisplay, color: MUTED, fontSize: 10, letterSpacing: "0.16em", textAlign: "center" }} className="uppercase">— or build one from settings —</div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Days per week">
                 <select style={inputStyle} value={bDays} onChange={(e) => setBDays(e.target.value)}>
@@ -3067,12 +3358,12 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                     )}
                     {editDay === d.day ? (
                       <>
-                        {d.hyrox && !customSplit && <HyroxCircuit dayLabel={d.day} snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
+                        {d.hyrox && <HyroxCircuit dayLabel={d.day} snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
                         <WorkoutEditor day={d} onCancel={() => setEditDay(null)}
                           onSave={(focus, exercises) => saveDayEdit(d.src, focus, exercises)}
                           onRestore={d.edited ? () => restoreDay(d.src) : null} />
                       </>
-                    ) : d.hyrox && !customSplit ? (
+                    ) : d.hyrox ? (
                       <>
                         <HyroxCircuit dayLabel={d.day} snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
                         {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} onReorder={(ex) => saveDayEdit(d.src, d.focus, ex)} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
