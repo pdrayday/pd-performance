@@ -3,7 +3,7 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw
+  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -99,10 +99,19 @@ function useSplitEdits() {
 const daySig = (d) => JSON.stringify([d.focus || "", (d.exercises || []).map((x) => x.name)]);
 function applySplitEdits(days, isCustom) {
   const bucket = splitEdits[isCustom ? "custom" : "coach"] || {};
-  return (days || []).map((d) => {
+  const edited = (days || []).map((d) => {
     const e = bucket[d.day];
-    if (!e || e.base !== daySig(d)) return d;
-    return { ...d, focus: e.focus || d.focus, exercises: e.exercises || [], edited: true };
+    if (!e || e.base !== daySig(d)) return { ...d, src: d.day };
+    return { ...d, focus: e.focus || d.focus, exercises: e.exercises || [], edited: true, src: d.day };
+  });
+  const names = edited.map((d) => d.day);
+  const order = bucket.__order;
+  const ok = Array.isArray(order) && order.length === names.length && names.every((n) => order.includes(n));
+  if (!ok) return edited;
+  /* each weekday slot shows the workout that was dragged onto it */
+  return names.map((slot, i) => {
+    const c = edited.find((x) => x.day === order[i]);
+    return { ...c, day: slot, src: c.src, moved: order[i] !== slot };
   });
 }
 /* superset links: `ss: true` = "back to back with the next exercise". Older plans only say
@@ -120,6 +129,198 @@ function ssFlags(list) {
   }
   return arr;
 }
+/* exercises → blocks (a single exercise, or a whole superset chain) and back */
+function exerciseGroups(list) {
+  const arr = ssFlags(list);
+  const groups = [];
+  for (let i = 0; i < arr.length; i++) {
+    const g = [arr[i]];
+    let j = i;
+    while (arr[j].ss && j + 1 < arr.length) { g.push(arr[j + 1]); j++; }
+    groups.push(g);
+    i = j;
+  }
+  return groups;
+}
+const flattenGroups = (groups) => groups.flatMap((g) => g.map((x, k) => ({ ...x, ss: k < g.length - 1 })));
+const moveItem = (arr, from, to) => { const a = [...arr]; const [x] = a.splice(from, 1); a.splice(to, 0, x); return a; };
+const swapItems = (arr, i, j) => { const a = [...arr]; [a[i], a[j]] = [a[j], a[i]]; return a; };
+
+/* ---------- editable cardio & abs (or remove the section entirely) ---------- */
+const CA_KEY = "pt:cardio-abs";
+const CA_DEFAULT = {
+  hidden: false,
+  items: [
+    { id: "Cardio · Warm-up", title: "Warm-up cardio — every workout", desc: "1 mile chill run or 15 min on the stair stepper at the beginning of every session.", skipLeg: false, at: "start" },
+    { id: "Abs · Core work", title: "Abs — every day except leg days", desc: "Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each.", skipLeg: true, at: "end" },
+  ],
+};
+let cardioAbs = CA_DEFAULT;
+const caListeners = new Set();
+const setCardioAbs = (v) => { cardioAbs = v || CA_DEFAULT; sset(CA_KEY, cardioAbs); caListeners.forEach((f) => f(cardioAbs)); };
+sget(CA_KEY).then((v) => { if (v && Array.isArray(v.items)) { cardioAbs = v; caListeners.forEach((f) => f(cardioAbs)); } });
+function useCardioAbs() {
+  const [v, setV] = useState(cardioAbs);
+  useEffect(() => { caListeners.add(setV); setV(cardioAbs); return () => caListeners.delete(setV); }, []);
+  return v;
+}
+const itemLabel = (id, weekday) => {
+  const ca = (cardioAbs.items || []).find((x) => x.id === id);
+  return ca ? ca.title : id.replace(`${weekday} · `, "");
+};
+
+/* ---------- hold-and-drag lists (touch + mouse) ----------
+   Hold about a third of a second, then drag. "insert" reorders; "swap" trades two items. */
+function DragList({ items, keyOf, render, onMove, mode = "insert", canDrag, handle = false, gap = 8, style }) {
+  const refs = useRef([]);
+  const st = useRef(null);
+  const [drag, setDrag] = useState(null);
+  const stop = () => {
+    const s = st.current;
+    if (!s) return;
+    clearTimeout(s.timer);
+    cancelAnimationFrame(s.raf);
+    s.off && s.off();
+    document.body.style.userSelect = "";
+    document.body.style.webkitUserSelect = "";
+    st.current = null;
+  };
+  useEffect(() => stop, []);
+  const update = () => {
+    const s = st.current;
+    if (!s || !s.active) return;
+    const pageY = s.y + window.scrollY;
+    const dy = pageY - (s.y0 + s.scroll0);
+    const r = s.rects;
+    let to = s.i;
+    if (mode === "swap") {
+      const hit = r.findIndex((q) => pageY >= q.top && pageY <= q.top + q.h);
+      to = hit >= 0 && (!canDrag || canDrag(items[hit])) ? hit : s.i;
+    } else {
+      const center = r[s.i].top + dy + r[s.i].h / 2;
+      for (let k = 0; k < r.length; k++) {
+        if (k === s.i) continue;
+        const mid = r[k].top + r[k].h / 2;
+        if (k < s.i && center < mid) to = Math.min(to, k);
+        if (k > s.i && center > mid) to = Math.max(to, k);
+      }
+    }
+    s.to = to;
+    setDrag((d) => (d && d.dy === dy && d.to === to ? d : { from: s.i, dy, to, pitch: s.pitch }));
+  };
+  const activate = () => {
+    const s = st.current;
+    if (!s || s.active) return;
+    s.active = true;
+    s.scroll0 = window.scrollY;
+    s.rects = items.map((_, k) => {
+      const el = refs.current[k];
+      const b = el ? el.getBoundingClientRect() : { top: 0, height: 0 };
+      return { top: b.top + window.scrollY, h: b.height };
+    });
+    const nxt = s.rects[s.i + 1];
+    s.pitch = nxt ? nxt.top - s.rects[s.i].top : s.rects[s.i].h + gap;
+    s.to = s.i;
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    try { window.getSelection && window.getSelection().removeAllRanges(); } catch (e) {}
+    setDrag({ from: s.i, dy: 0, to: s.i, pitch: s.pitch });
+    const tick = () => {
+      const t = st.current;
+      if (!t || !t.active) return;
+      const vh = window.innerHeight;
+      if (t.y < 80) window.scrollBy(0, -Math.ceil((80 - t.y) / 5));
+      else if (t.y > vh - 130) window.scrollBy(0, Math.ceil((t.y - (vh - 130)) / 5));
+      update();
+      t.raf = requestAnimationFrame(tick);
+    };
+    s.raf = requestAnimationFrame(tick);
+  };
+  const finish = () => {
+    const s = st.current;
+    const wasActive = s && s.active;
+    const from = s ? s.i : 0;
+    const to = s ? s.to : 0;
+    stop();
+    if (!wasActive) return;
+    /* swallow the click that follows a drag so it doesn't toggle anything */
+    const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+    window.addEventListener("click", swallow, true);
+    setTimeout(() => window.removeEventListener("click", swallow, true), 350);
+    setDrag(null);
+    if (to != null && to !== from) onMove(from, to);
+  };
+  const start = (i, x, y, target, isTouch) => {
+    if (canDrag && !canDrag(items[i])) return false;
+    if (target.closest && target.closest("input, textarea, select, [contenteditable=true], [data-no-drag]")) return false;
+    if (handle && !(target.closest && target.closest("[data-drag-handle]"))) return false;
+    stop();
+    const s = { i, x0: x, y0: y, x, y, active: false, isTouch };
+    st.current = s;
+    if (isTouch) s.timer = setTimeout(activate, 320);
+    const move = (cx, cy) => {
+      s.x = cx; s.y = cy;
+      if (!s.active) {
+        const far = Math.abs(cx - s.x0) > 8 || Math.abs(cy - s.y0) > 8;
+        if (isTouch && far) stop();
+        else if (!isTouch && Math.abs(cy - s.y0) > 5) activate();
+        return;
+      }
+      update();
+    };
+    const onTouchMove = (ev) => { if (s.active) ev.preventDefault(); const t = ev.touches[0]; if (t) move(t.clientX, t.clientY); };
+    const onMouseMove = (ev) => move(ev.clientX, ev.clientY);
+    const end = () => finish();
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", end);
+    window.addEventListener("touchcancel", end);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", end);
+    s.off = () => {
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", end);
+      window.removeEventListener("touchcancel", end);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", end);
+    };
+    return true;
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap, ...style }}>
+      {items.map((it, i) => {
+        let ty = 0, lifted = false, target = false;
+        if (drag) {
+          if (i === drag.from) { ty = drag.dy; lifted = true; }
+          else if (mode === "insert") {
+            if (drag.from < drag.to && i > drag.from && i <= drag.to) ty = -drag.pitch;
+            if (drag.from > drag.to && i >= drag.to && i < drag.from) ty = drag.pitch;
+          } else if (i === drag.to) target = true;
+        }
+        return (
+          <div key={keyOf(it, i)} ref={(el) => { refs.current[i] = el; }}
+            onTouchStart={(e) => { if (e.nativeEvent.__pdDrag) return; const t = e.touches[0]; if (start(i, t.clientX, t.clientY, e.target, true)) e.nativeEvent.__pdDrag = true; }}
+            onMouseDown={(e) => { if (e.button !== 0 || e.nativeEvent.__pdDrag) return; if (start(i, e.clientX, e.clientY, e.target, false)) e.nativeEvent.__pdDrag = true; }}
+            onContextMenu={(e) => { if (st.current) e.preventDefault(); }}
+            style={{
+              position: "relative",
+              transform: ty || lifted ? `translateY(${ty}px)${lifted ? " scale(1.02)" : ""}` : undefined,
+              transition: lifted ? "none" : "transform .18s ease",
+              zIndex: lifted ? 40 : undefined,
+              filter: lifted ? "drop-shadow(0 12px 22px rgba(0,0,0,0.45))" : undefined,
+              outline: target ? `2px solid ${RED}` : undefined, outlineOffset: target ? 2 : undefined, borderRadius: target ? 12 : undefined,
+              WebkitTouchCallout: "none",
+            }}>
+            {render(it, i, { dragging: lifted, target, active: !!drag })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* the little grip that says "you can drag this" */
+const Grip = ({ size = 14 }) => <GripVertical size={size} color={MUTED} style={{ flexShrink: 0, opacity: 0.75 }} />;
 
 /* ---------- image compression (keeps storage under limits) ---------- */
 const compressImage = (file, maxW = 600, quality = 0.65) =>
@@ -1729,13 +1930,15 @@ function trainItemsFor(weekday, customSplit) {
   const split = applySplitEdits(customSplit ? customSplit.days : SPLIT, !!customSplit);
   const today = (split || []).find((x) => x.day === weekday);
   const hasEx = !!(today && today.exercises && today.exercises.length);
-  if (!hasEx && (weekday === "Sunday" || !today || /rest/i.test(today.focus || ""))) return [];
+  const hyrox = !!(today && today.hyrox && !customSplit);
+  if (!hasEx && !hyrox && (weekday === "Sunday" || !today || /rest/i.test(today.focus || ""))) return [];
   if (customSplit && !today) return [];
-  const items = ["Cardio · Warm-up"];
-  const legDay = !customSplit && (weekday === "Monday" || weekday === "Thursday");
-  if (today && today.hyrox && !customSplit) HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
+  const legDay = !customSplit && !!today && (today.src === "Monday" || today.src === "Thursday");
+  const extras = (cardioAbs.hidden ? [] : cardioAbs.items || []).filter((x) => !(x.skipLeg && legDay));
+  const items = extras.filter((x) => x.at === "start").map((x) => x.id);
+  if (hyrox) HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
   if (today && today.exercises) today.exercises.forEach((ex) => items.push(`${weekday} · ${ex.name}`));
-  if (!legDay) items.push("Abs · Core work");
+  extras.filter((x) => x.at !== "start").forEach((x) => items.push(x.id));
   return items;
 }
 const last7Dates = () => [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d; });
@@ -2081,14 +2284,14 @@ function CalEventEdit({ ev, onClose, onSave, onDelete }) {
   );
 }
 
-function HyroxCircuit({ snaps, addSnap, isDone, toggleDone, noteGet, noteSet }) {
+function HyroxCircuit({ snaps, addSnap, isDone, toggleDone, noteGet, noteSet, dayLabel = "Monday" }) {
   const thumbs = (label) => (snaps || []).filter((x) => x.type === "workout" && x.label === label).slice(0, 3);
   return (
     <div className="relative mt-4" style={{ paddingLeft: 26 }}>
       <div style={{ position: "absolute", left: 9, top: 8, bottom: 8, width: 2, background: `linear-gradient(${RED}, ${LINE})` }} />
       {HYROX.map((seg, i) => {
-        const runLabel = `Monday · Run ${i + 1} (${seg.run})`;
-        const stLabel = `Monday · ${seg.station}`;
+        const runLabel = `${dayLabel} · Run ${i + 1} (${seg.run})`;
+        const stLabel = `${dayLabel} · ${seg.station}`;
         return (
         <div key={i} className="relative mb-5">
           <div className="flex items-center gap-3 mb-2">
@@ -2125,13 +2328,15 @@ function HyroxCircuit({ snaps, addSnap, isDone, toggleDone, noteGet, noteSet }) 
   );
 }
 
-function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet }) {
+function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet, grip }) {
   const label = `${dayLabel} · ${ex.name}`;
   const mine = (snaps || []).filter((x) => x.type === "workout" && x.label === label).slice(0, 3);
   return (
     <div style={{ background: inSuperset ? "transparent" : SURFACE, border: inSuperset ? "none" : `1px solid ${LINE}`, borderRadius: inSuperset ? 0 : 10, padding: "10px 12px" }}>
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-start gap-2" style={{ minWidth: 0 }}>
+        {grip && <span style={{ marginTop: 1 }}><Grip size={13} /></span>}
+        <div style={{ minWidth: 0 }}>
           <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ex.name}</div>
           <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{ex.note}</div>
           {mine.length > 0 && (
@@ -2139,6 +2344,7 @@ function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel, isDone, toggleD
               {mine.map((x) => <SnapThumb key={x.id} x={x} />)}
             </div>
           )}
+        </div>
         </div>
         <div className="flex items-center gap-2" style={{ marginLeft: 10 }}>
           <div style={{ ...fontMono, color: RED, fontSize: 12, whiteSpace: "nowrap" }}>
@@ -2153,40 +2359,40 @@ function ExerciseRow({ ex, inSuperset, snaps, addSnap, dayLabel, isDone, toggleD
   );
 }
 
-function ExerciseList({ exercises, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet }) {
-  const list = ssFlags(exercises);
+function ExerciseList({ exercises, snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet, onReorder }) {
+  const groups = exerciseGroups(exercises);
   const rowProps = { snaps, addSnap, dayLabel, isDone, toggleDone, noteGet, noteSet };
-  const rows = [];
-  for (let i = 0; i < list.length; i++) {
-    const group = [list[i]];
-    let j = i;
-    while (list[j].ss && j + 1 < list.length) { group.push(list[j + 1]); j++; }
-    if (group.length > 1) {
-      rows.push(
-        <div key={i} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderLeft: `3px solid ${RED}`, borderRadius: 10, overflow: "hidden" }}>
-          <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, padding: "7px 12px 0" }}>
-            <Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
-          </div>
-          {group.map((ex, gi) => (
-            <React.Fragment key={gi}>
-              {gi > 0 && (
-                <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
-                  <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
-                  <Link2 size={12} color={RED} />
-                  <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
-                </div>
-              )}
-              <ExerciseRow ex={ex} inSuperset {...rowProps} />
-            </React.Fragment>
-          ))}
-        </div>
-      );
-      i = j;
-    } else {
-      rows.push(<ExerciseRow key={i} ex={list[i]} {...rowProps} />);
-    }
-  }
-  return <div className="mt-3 space-y-2">{rows}</div>;
+  const canMove = !!onReorder && groups.length > 1;
+  const block = (group) => group.length > 1 ? (
+    <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderLeft: `3px solid ${RED}`, borderRadius: 10, overflow: "hidden" }}>
+      <div className="flex items-center gap-1" style={{ ...fontDisplay, fontSize: 9, letterSpacing: "0.18em", color: RED, padding: "7px 12px 0" }}>
+        {canMove && <Grip size={12} />}<Link2 size={10} /> SUPERSET · BACK TO BACK, THEN REST
+      </div>
+      {group.map((ex, gi) => (
+        <React.Fragment key={gi}>
+          {gi > 0 && (
+            <div className="flex items-center" style={{ gap: 8, padding: "0 12px" }}>
+              <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
+              <Link2 size={12} color={RED} />
+              <div style={{ flex: 1, borderTop: `1px dashed ${LINE}` }} />
+            </div>
+          )}
+          <ExerciseRow ex={ex} inSuperset {...rowProps} />
+        </React.Fragment>
+      ))}
+    </div>
+  ) : (
+    <ExerciseRow ex={group[0]} grip={canMove} {...rowProps} />
+  );
+  if (!canMove) return <div className="mt-3 space-y-2">{groups.map((g, i) => <React.Fragment key={i}>{block(g)}</React.Fragment>)}</div>;
+  return (
+    <div className="mt-3">
+      <DragList items={groups} keyOf={(g, i) => `${i}:${g.map((x) => x.name).join("|")}`}
+        onMove={(a, b) => onReorder(flattenGroups(moveItem(groups, a, b)))}
+        render={(g) => block(g)} />
+      <div style={{ ...fontBody, color: MUTED, fontSize: 10.5, marginTop: 6, textAlign: "center" }}>Hold an exercise or superset to drag it into a new spot</div>
+    </div>
+  );
 }
 
 /* small square icon button used by the editors */
@@ -2354,14 +2560,16 @@ function MealPlanEditor({ plan, onSave, onCancel }) {
 function LogDayPicker({ value, onChange, what }) {
   const opts = logChoices();
   const sel = opts.find((o) => o.k === value) || opts[0];
+  const row = useRef(null);
+  useEffect(() => { const el = row.current; if (el) el.scrollLeft = el.scrollWidth; }, []);
   return (
     <Card style={{ padding: 14 }}>
       <div className="flex items-center justify-between gap-2">
         <Eyebrow>Logging for</Eyebrow>
         <span style={{ ...fontBody, color: MUTED, fontSize: 11 }}>Catch up to 7 days late</span>
       </div>
-      <div className="flex gap-2 mt-3" style={{ overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
-        {opts.map((o) => {
+      <div ref={row} className="flex gap-2 mt-3" style={{ overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+        {[...opts].reverse().map((o) => {
           const on = o.k === sel.k;
           const lab = o.i === 0 ? "Today" : o.i === 1 ? "Yest." : o.d.toLocaleDateString("en-US", { weekday: "short" });
           return (
@@ -2453,9 +2661,11 @@ function downloadSplitPdf(activeSplit, isCustom, light, preview) {
     }
     st.y += 8;
   });
-  pdfLine(st, "CARDIO & ABS", { red: true, bold: true, size: 12, gap: 4 });
-  pdfLine(st, activeSplit[0]?.warmup ? `Warm-up cardio, every workout — ${activeSplit[0].warmup}` : "Warm-up cardio, every workout — 1 mile chill run or 15 min on the stair stepper.", { indent: true, bullet: true });
-  pdfLine(st, activeSplit[0]?.abs ? `Abs — ${activeSplit[0].abs}` : "Abs every day except leg days (Monday & Thursday) — pick 2–3 core moves, 3 sets each.", { indent: true, bullet: true });
+  const caItems = cardioAbs.hidden ? [] : cardioAbs.items || [];
+  if (caItems.length) {
+    pdfLine(st, "CARDIO & ABS", { red: true, bold: true, size: 12, gap: 4 });
+    caItems.forEach((x) => pdfLine(st, x.desc ? `${x.title} — ${x.desc}` : x.title, { indent: true, bullet: true }));
+  }
   if (preview) return st.doc.output("bloburl");
   st.doc.save("pd-workout-plan.pdf");
 }
@@ -2540,15 +2750,34 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
   const saveDayEdit = (dayName, focus, exercises) => {
     const orig = rawSplit.find((x) => x.day === dayName);
     if (!orig) return;
-    const bucket = { ...(edits[bucketName] || {}) };
+    const cur = splitEdits;
+    const bucket = { ...(cur[bucketName] || {}) };
     bucket[dayName] = { base: daySig(orig), focus, exercises };
-    setSplitEdits({ ...edits, [bucketName]: bucket });
+    setSplitEdits({ ...cur, [bucketName]: bucket });
     setEditDay(null);
   };
+  const dayOrder = activeSplit.map((x) => x.src);
+  const swapDays = (a, b) => {
+    const order = swapItems(dayOrder, a, b);
+    const cur = splitEdits;
+    const bucket = { ...(cur[bucketName] || {}) };
+    if (order.every((n, i) => n === rawSplit[i].day)) delete bucket.__order; else bucket.__order = order;
+    setSplitEdits({ ...cur, [bucketName]: bucket });
+    setOpenDay(null);
+    setEditDay(null);
+  };
+  const resetOrder = () => {
+    const cur = splitEdits;
+    const bucket = { ...(cur[bucketName] || {}) };
+    delete bucket.__order;
+    setSplitEdits({ ...cur, [bucketName]: bucket });
+  };
+  const anyMoved = activeSplit.some((x) => x.moved);
   const restoreDay = (dayName) => {
-    const bucket = { ...(edits[bucketName] || {}) };
+    const cur = splitEdits;
+    const bucket = { ...(cur[bucketName] || {}) };
     delete bucket[dayName];
-    setSplitEdits({ ...edits, [bucketName]: bucket });
+    setSplitEdits({ ...cur, [bucketName]: bucket });
     setEditDay(null);
   };
 
@@ -2614,21 +2843,30 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
           </div>
         )}
 
-        <div className="mt-4 space-y-2">
-          {activeSplit.map((d) => {
+        <div className="flex items-center justify-between gap-2 mt-4" style={{ ...fontBody, color: MUTED, fontSize: 11 }}>
+          <span className="flex items-center gap-1"><Grip size={12} /> Hold a day and drop it on another to swap them</span>
+          {anyMoved && (
+            <button onClick={resetOrder} className="flex items-center gap-1" style={{ ...fontBody, color: RED, fontSize: 11, background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+              <RotateCcw size={11} /> Reset week order
+            </button>
+          )}
+        </div>
+        <div className="mt-2">
+          <DragList items={activeSplit} mode="swap" handle keyOf={(d) => d.day} onMove={swapDays} render={(d) => {
             const open = openDay === d.day;
-            const dayVideos = videos.filter((v) => v.day === d.day);
+            const dayVideos = videos.filter((v) => v.day === d.src);
             return (
-              <div key={d.day} style={{ border: `1px solid ${open ? RED : LINE}`, borderRadius: 12, overflow: "hidden" }}>
-                <div onClick={() => setOpenDay(open ? null : d.day)} className="flex items-center justify-between"
-                  style={{ padding: "12px 14px", cursor: "pointer", background: open ? SURFACE2 : "transparent" }}>
-                  <div className="flex items-center gap-3">
+              <div style={{ border: `1px solid ${open ? RED : LINE}`, borderRadius: 12, overflow: "hidden", background: SURFACE }}>
+                <div data-drag-handle onClick={() => setOpenDay(open ? null : d.day)} className="flex items-center justify-between"
+                  style={{ padding: "12px 14px 12px 8px", cursor: "pointer", background: open ? SURFACE2 : "transparent" }}>
+                  <div className="flex items-center gap-2">
+                    <Grip size={14} />
                     <span style={{ ...fontMono, color: MUTED, fontSize: 11, width: 32 }}>{d.day.slice(0, 3).toUpperCase()}</span>
                     <span style={{ ...fontDisplay, color: PAPER, fontSize: 15, letterSpacing: "0.04em" }} className="uppercase">{d.focus}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {d.edited && (
-                      <span style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.15em", border: `1px solid ${LINE}`, borderRadius: 99, padding: "1px 7px" }} className="uppercase">Edited</span>
+                    {(d.edited || d.moved) && (
+                      <span style={{ ...fontDisplay, color: MUTED, fontSize: 9.5, letterSpacing: "0.15em", border: `1px solid ${LINE}`, borderRadius: 99, padding: "1px 7px" }} className="uppercase">{d.moved ? `From ${d.src.slice(0, 3)}` : "Edited"}</span>
                     )}
                     {d.hyrox && (
                       <span style={{ ...fontDisplay, color: RED, fontSize: 10, letterSpacing: "0.15em" }} className="uppercase">{d.tag}</span>
@@ -2669,18 +2907,18 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                     )}
                     {editDay === d.day ? (
                       <>
-                        {d.hyrox && !customSplit && <HyroxCircuit snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
+                        {d.hyrox && !customSplit && <HyroxCircuit dayLabel={d.day} snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
                         <WorkoutEditor day={d} onCancel={() => setEditDay(null)}
-                          onSave={(focus, exercises) => saveDayEdit(d.day, focus, exercises)}
-                          onRestore={d.edited ? () => restoreDay(d.day) : null} />
+                          onSave={(focus, exercises) => saveDayEdit(d.src, focus, exercises)}
+                          onRestore={d.edited ? () => restoreDay(d.src) : null} />
                       </>
                     ) : d.hyrox && !customSplit ? (
                       <>
-                        <HyroxCircuit snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
-                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
+                        <HyroxCircuit dayLabel={d.day} snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
+                        {d.exercises && d.exercises.length > 0 && <ExerciseList exercises={d.exercises} onReorder={(ex) => saveDayEdit(d.src, d.focus, ex)} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />}
                       </>
                     ) : d.exercises && d.exercises.length > 0 ? (
-                      <ExerciseList exercises={d.exercises} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
+                      <ExerciseList exercises={d.exercises} onReorder={(ex) => saveDayEdit(d.src, d.focus, ex)} snaps={snaps} addSnap={addSnap} dayLabel={d.day} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
                     ) : (
                       <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>
                         {customSplit ? d.tag : d.day === "Sunday" ? "Full rest. Walk, stretch, sleep, hydrate — recovery is where the growth happens." : `${d.focus} session.`}
@@ -2739,14 +2977,14 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                         <input style={inputStyle} placeholder="Video URL (YouTube or any link)" value={vUrl} onChange={(e) => setVUrl(e.target.value)} />
                         <Btn variant="ghost" onClick={() => {
                           if (!vUrl.trim()) return;
-                          addVideo({ id: Date.now().toString(), day: d.day, title: vTitle.trim() || "Demo", url: vUrl.trim() });
+                          addVideo({ id: Date.now().toString(), day: d.src, title: vTitle.trim() || "Demo", url: vUrl.trim() });
                           setVTitle(""); setVUrl("");
                         }}>
                           <Plus size={14} /> Add to {d.day}
                         </Btn>
                       </div>
                     )}
-                    {!trainerMode && dayVideos.length === 0 && d.day !== "Sunday" && (
+                    {!trainerMode && dayVideos.length === 0 && d.src !== "Sunday" && (
                       <p style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 10 }}>
                         No videos yet — your trainer will post demos here.
                       </p>
@@ -2755,7 +2993,7 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
                 )}
               </div>
             );
-          })}
+          }} />
         </div>
 
         <AiApplyBox
@@ -2795,51 +3033,106 @@ function WorkoutsTab({ trainerMode, videos, addVideo, removeVideo, customSplit, 
         </div>
       </Card>
 
-      {/* cardio & abs — every week */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <Eyebrow>Cardio & Abs</Eyebrow>
-          <Flame size={16} color={RED} />
-        </div>
-        <div className="mt-3 space-y-2">
-          <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div className="flex items-center justify-between gap-2">
-              <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Warm-up cardio — every workout</div>
-                <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
-                  1 mile chill run or 15 min on the stair stepper at the beginning of every session.
-                </div>
-              </div>
-              <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                {(snaps || []).filter((x) => x.type === "workout" && x.label === "Cardio · Warm-up").slice(0, 3).map((x) => <SnapThumb key={x.id} x={x} size={22} />)}
-                <TinySnap onSave={(data, vid) => addSnap("workout", data, "Cardio · Warm-up", vid)} />
-                <DoneBox id="Cardio · Warm-up" isDone={isDone} toggleDone={toggleDone} />
-              </div>
-            </div>
-            <RowNote value={noteGet("train", "Cardio · Warm-up")} onSave={(t) => noteSet("train", "Cardio · Warm-up", t)} />
-          </div>
-          <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div className="flex items-center justify-between gap-2">
-              <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>Abs — every day except leg days</div>
-                <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>
-                  Hit core at the end of every session except Monday and Thursday (leg days). Pick any 2–3: hanging knee raises, cable crunches, planks, ab-wheel — 3 sets each.
-                </div>
-              </div>
-              <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                {(snaps || []).filter((x) => x.type === "workout" && x.label === "Abs · Core work").slice(0, 3).map((x) => <SnapThumb key={x.id} x={x} size={22} />)}
-                <TinySnap onSave={(data, vid) => addSnap("workout", data, "Abs · Core work", vid)} />
-                <DoneBox id="Abs · Core work" isDone={isDone} toggleDone={toggleDone} />
-              </div>
-            </div>
-            <RowNote value={noteGet("train", "Abs · Core work")} onSave={(t) => noteSet("train", "Abs · Core work", t)} />
-          </div>
-        </div>
-      </Card>
+      {/* cardio & abs — editable, removable */}
+      <CardioAbsCard snaps={snaps} addSnap={addSnap} isDone={isDone} toggleDone={toggleDone} noteGet={noteGet} noteSet={noteSet} />
 
       {trainerMode && <TrainerResources />}
 
     </div>
+  );
+}
+
+/* ---------- cardio & abs card: check off, edit, add, remove, or drop the whole section ---------- */
+function CardioAbsCard({ snaps, addSnap, isDone, toggleDone, noteGet, noteSet }) {
+  const ca = useCardioAbs();
+  const [editing, setEditing] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [draft, setDraft] = useState([]);
+  const small = { ...inputStyle, padding: "7px 9px", fontSize: 12.5 };
+  if (ca.hidden) return (
+    <Card style={{ padding: 14 }}>
+      <div className="flex items-center justify-between gap-3">
+        <span style={{ ...fontBody, color: MUTED, fontSize: 12.5, lineHeight: 1.5 }}>Cardio & Abs is off — it no longer counts toward your training accountability.</span>
+        <Btn variant="ghost" onClick={() => setCardioAbs({ ...ca, hidden: false, items: ca.items && ca.items.length ? ca.items : CA_DEFAULT.items })}><Plus size={14} /> Add back</Btn>
+      </div>
+    </Card>
+  );
+  const beginEdit = () => { setDraft((ca.items || []).map((x) => ({ ...x }))); setEditing(true); setConfirmRemove(false); };
+  const upd = (i, patch) => setDraft(draft.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const save = () => {
+    const kept = draft.filter((x) => (x.title || "").trim()).map((x) => ({ ...x, title: x.title.trim(), desc: (x.desc || "").trim() }));
+    setCardioAbs({ ...ca, items: kept });
+    setEditing(false);
+  };
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-2">
+        <Eyebrow>Cardio & Abs</Eyebrow>
+        {!editing && (
+          <div className="flex items-center gap-2">
+            <button onClick={beginEdit} className="flex items-center gap-1 uppercase"
+              style={{ ...fontDisplay, fontSize: 10.5, letterSpacing: "0.12em", color: RED, background: "transparent", border: `1px solid ${LINE}`, borderRadius: 99, padding: "5px 10px", cursor: "pointer" }}>
+              <Pencil size={12} color={RED} /> Edit
+            </button>
+            <IconBtn label="Remove the Cardio & Abs section" onClick={() => setConfirmRemove(true)}><Trash2 size={13} color={MUTED} /></IconBtn>
+          </div>
+        )}
+      </div>
+      {confirmRemove && (
+        <div className="mt-3" style={{ border: `1px solid ${RED}`, borderRadius: 12, padding: 12 }}>
+          <p style={{ ...fontBody, color: PAPER, fontSize: 12.5, margin: 0, lineHeight: 1.5 }}>Remove the whole Cardio & Abs section? It'll stop counting toward your accountability. You can add it back anytime.</p>
+          <div className="flex gap-2 mt-3">
+            <Btn onClick={() => { setCardioAbs({ ...ca, hidden: true }); setConfirmRemove(false); }}><Trash2 size={14} /> Remove</Btn>
+            <Btn variant="ghost" onClick={() => setConfirmRemove(false)}>Keep it</Btn>
+          </div>
+        </div>
+      )}
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          {draft.map((x, i) => (
+            <div key={x.id} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "9px 10px" }}>
+              <div className="flex items-center gap-2">
+                <input style={{ ...small, fontWeight: 600 }} value={x.title} placeholder="e.g. Stretch & mobility" onChange={(e) => upd(i, { title: e.target.value })} />
+                <IconBtn label="Remove item" onClick={() => setDraft(draft.filter((_, j) => j !== i))}><Trash2 size={13} color={MUTED} /></IconBtn>
+              </div>
+              <textarea rows={2} style={{ ...small, marginTop: 6, resize: "vertical" }} value={x.desc} placeholder="What to do" onChange={(e) => upd(i, { desc: e.target.value })} />
+              <label className="flex items-center gap-2 mt-2" style={{ ...fontBody, color: MUTED, fontSize: 12, cursor: "pointer" }}>
+                <input type="checkbox" checked={!!x.skipLeg} onChange={(e) => upd(i, { skipLeg: e.target.checked })} /> Skip on leg days
+              </label>
+            </div>
+          ))}
+          {draft.length === 0 && <p style={{ ...fontBody, color: MUTED, fontSize: 12.5 }}>No items — add one, or save to keep the section empty.</p>}
+          <div className="flex gap-2 flex-wrap pt-1">
+            <Btn variant="ghost" onClick={() => setDraft([...draft, { id: `Extra · ${Date.now()}`, title: "", desc: "", skipLeg: false, at: "end" }])}><Plus size={14} /> Add item</Btn>
+            <Btn variant="ghost" onClick={() => setDraft(CA_DEFAULT.items.map((x) => ({ ...x })))}><RotateCcw size={13} /> Defaults</Btn>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Btn onClick={save} style={{ flex: 1, justifyContent: "center" }}><Check size={14} /> Save</Btn>
+            <Btn variant="ghost" onClick={() => setEditing(false)}>Cancel</Btn>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {(ca.items || []).length === 0 && <p style={{ ...fontBody, color: MUTED, fontSize: 12.5, margin: 0 }}>Nothing here yet — tap Edit to add cardio, abs, mobility, or anything you do every session.</p>}
+          {(ca.items || []).map((x) => (
+            <div key={x.id} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px" }}>
+              <div className="flex items-center justify-between gap-2">
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{x.title}</div>
+                  {x.desc && <div style={{ ...fontBody, color: MUTED, fontSize: 12, marginTop: 2 }}>{x.desc}</div>}
+                </div>
+                <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
+                  {(snaps || []).filter((sn) => sn.type === "workout" && sn.label === x.id).slice(0, 3).map((sn) => <SnapThumb key={sn.id} x={sn} size={22} />)}
+                  <TinySnap onSave={(data, vid) => addSnap("workout", data, x.id, vid)} />
+                  <DoneBox id={x.id} isDone={isDone} toggleDone={toggleDone} />
+                </div>
+              </div>
+              <RowNote value={noteGet("train", x.id)} onSave={(t) => noteSet("train", x.id, t)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -3067,18 +3360,27 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
             <MealPlanEditor plan={dietPlan} onCancel={() => setEditPlan(false)} onSave={(t) => { setDietPlan(t); setEditPlan(false); }} />
           ) : (<>
           <div className="mt-3">
-            {dietPlan.split("\n").map((ln, i) => {
-              const t = ln.trim();
-              if (!t) return <div key={i} style={{ height: 10 }} />;
+            <div className="flex items-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: 6 }}><Grip size={12} /> Hold a meal to drag it to a new spot</div>
+            <DragList items={dietPlan.split("\n").map((x) => x.trim()).filter(Boolean)} gap={0} keyOf={(t, i) => `${i}:${t}`}
+              canDrag={(t) => isPlanMeal(t)}
+              onMove={(a, b) => {
+                const lines = moveItem(dietPlan.split("\n").map((x) => x.trim()).filter(Boolean), a, b);
+                const rows = renumberMeals(lines.map((t) => ({ t })));
+                const out = [];
+                rows.forEach((r, i) => { if (i > 0 && isPlanHead(r.t)) out.push(""); out.push(r.t); });
+                setDietPlan(out.join("\n"));
+              }}
+              render={(t, i) => {
               if (/^[A-Z][A-Z \/&'\u2019-]{3,}$/.test(t)) return (
-                <div key={i} style={{ ...fontDisplay, color: RED, fontSize: 12, letterSpacing: "0.16em", marginTop: 16, marginBottom: 8 }} className="uppercase">{t}</div>
+                <div style={{ ...fontDisplay, color: RED, fontSize: 12, letterSpacing: "0.16em", marginTop: 16, marginBottom: 8 }} className="uppercase">{t}</div>
               );
               if (/^meal \d/i.test(t)) {
                 const ci = t.indexOf(":");
                 const mealKey = (ci > 0 ? t.slice(0, ci) : t).replace(/\s*\(.*\)/, "");
                 const mealSnaps = (snaps || []).filter((x) => x.type === "meal" && x.label === mealKey).slice(0, 4);
                 return (
-                  <div key={i} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+                  <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+                    <span style={{ float: "right", marginLeft: 6 }}><Grip size={13} /></span>
                     <span style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 600 }}>{ci > 0 ? t.slice(0, ci + 1) : ""} </span>
                     <span style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6 }}>{ci > 0 ? t.slice(ci + 1) : t}</span>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -3097,8 +3399,8 @@ Format: start with a 2-sentence overview including a daily calorie and protein t
                   </div>
                 );
               }
-              return <p key={i} style={{ ...fontBody, color: PAPER, fontSize: 13, lineHeight: 1.75, margin: "0 0 10px" }}>{t}</p>;
-            })}
+              return <p style={{ ...fontBody, color: PAPER, fontSize: 13, lineHeight: 1.75, margin: "0 0 10px" }}>{t}</p>;
+            }} />
           </div>
           <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
             <Btn onClick={() => downloadDietPdf(dietPlan, prefs, profile, dietPdfLight, false)}>
@@ -3491,15 +3793,20 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
           <p style={{ ...fontBody, color: MUTED, fontSize: 13 }}>No commitments yet. Tap the red + up top to add your first one — start with something you can do every single day.</p>
         </Card>
       ) : (
-        commitments.map((c) => {
+        <>
+        <div className="flex items-center gap-1" style={{ ...fontBody, color: MUTED, fontSize: 11, marginBottom: -8 }}><Grip size={12} /> Hold a commitment's title to drag it</div>
+        <DragList items={commitments} handle gap={20} keyOf={(c) => c.id}
+          onMove={(a, b) => setCommitments(moveItem(commitments, a, b))}
+          render={(c) => {
           const done = c.checks.includes(logDk);
           const rOn = c.reminder?.enabled;
           const r = c.reminder || { lead: "30 min", dueTime: "18:00", dueDate: "" };
           const needsDate = r.lead === "1 day" || r.lead === "1 week";
           return (
-            <Card key={c.id} style={{ borderColor: done ? RED : LINE }}>
+            <Card style={{ borderColor: done ? RED : LINE }}>
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3" style={{ flex: 1 }}>
+                <div data-drag-handle className="flex items-center gap-3" style={{ flex: 1 }}>
+                  <Grip size={14} />
                   <button onClick={() => toggle(c.id)}
                     style={{
                       width: 26, height: 26, borderRadius: 8, flexShrink: 0,
@@ -3657,7 +3964,8 @@ function AccountabilityTab({ commitments, setCommitments, dailyLog, setDailyLog,
               </div>
             </Card>
           );
-        })
+        }} />
+        </>
       )}
 
     </div>
@@ -4738,19 +5046,12 @@ export default function App() {
     const split = applySplitEdits(customSplit ? customSplit.days : SPLIT, !!customSplit);
     const today = (split || []).find((x) => x.day === weekday);
     const lines = [`PD Performance check-in — ${weekday}, ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, ""];
-    const items = [];
-    const legDay = !customSplit && (weekday === "Monday" || weekday === "Thursday");
-    items.push("Cardio · Warm-up");
-    if (today && today.hyrox && !customSplit) {
-      HYROX.forEach((h, i) => { items.push(`${weekday} · Run ${i + 1} (${h.run})`); items.push(`${weekday} · ${h.station}`); });
-    }
-    if (today && today.exercises) today.exercises.forEach((ex) => items.push(`${weekday} · ${ex.name}`));
-    if (!legDay) items.push("Abs · Core work");
+    const items = trainItemsFor(weekday, customSplit);
     const wDone = items.filter((i) => done[i]).length;
     const notes0 = dayNotes[dateKey] || {};
     lines.push(`WORKOUT${today ? ` — ${today.focus}` : ""} (${wDone}/${items.length})`);
     items.forEach((i) => {
-      lines.push(`${done[i] ? "✅" : "⬜️"} ${i.replace(`${weekday} · `, "")}`);
+      lines.push(`${done[i] ? "✅" : "⬜️"} ${itemLabel(i, weekday)}`);
       const n = (notes0.train || {})[i];
       if (n) lines.push(`   ↳ actually did: ${n}`);
     });
@@ -4806,7 +5107,7 @@ export default function App() {
       const wDone = items.filter((i) => done[i]).length;
       lines.push(`${weekday} ${dateLabel} — workout (${wDone}/${items.length || 0})`);
       items.forEach((i) => {
-        lines.push(`${done[i] ? "✅" : "⬜️"} ${i.replace(`${weekday} · `, "")}`);
+        lines.push(`${done[i] ? "✅" : "⬜️"} ${itemLabel(i, weekday)}`);
         const n = (notes.train || {})[i];
         if (n) lines.push(`   ↳ ${n}`);
       });
