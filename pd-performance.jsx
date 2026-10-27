@@ -607,55 +607,81 @@ const SPLIT = [
   { day: "Sunday", focus: "Rest & Recovery", tag: "RECOVER", exercises: [] },
 ];
 
+/* Pricing — every plan includes the app; the difference is how much direct access to Payton you get.
+   Coaching plans bill month-to-month, or paid in full for 6 months at a lower monthly rate. */
+const PIF_MONTHS = 6;
 const PLANS = [
   {
-    id: "plus",
-    name: "PD Plus",
-    sub: "Self-guided premium",
-    price: 29,
-    per: "per month · cancel anytime",
-    monthly: 29,
-    features: ["AI-built custom splits & meal plans", "PDF exports & progress analytics", "Partner discounts — supplements & apparel", "Everything in Free"],
+    id: "basic",
+    name: "Basic",
+    sub: "The app + your AI coach",
+    price: 4.99,
+    per: "one-time purchase",
+    flat: true,
+    noAddon: true,
+    store: "On iPhone, Basic is a one-time $4.99 App Store purchase.",
+    features: [
+      "Full app — workout split, Fuel, Track, accountability %",
+      "AI coach — builds your splits & meal plans, answers questions",
+      "Talk-through (voice) split builder",
+      "Body comp check, weigh-ins & photo tracking",
+    ],
+    excludes: ["No direct access to Payton", "No community chat"],
   },
   {
     id: "onetime",
     name: "One-Time",
-    sub: "1 month of training & dieting",
+    sub: "One month with Payton",
     price: 300,
-    per: "flat · one month",
-    monthly: 300,
+    per: "flat · one month, doesn't renew",
     flat: true,
-    features: ["Full workout split & videos", "Custom diet plan", "Accountability tracker", "AI coach access"],
+    features: [
+      "Everything in Basic",
+      "Direct access to Payton for 1 month",
+      "Personalized training program & nutrition plan",
+      "Weekly check-ins · messaging within 24–48 hrs",
+      "Community chat access",
+    ],
   },
   {
-    id: "basic",
-    name: "Basic",
-    sub: "Month-to-month",
-    price: 285,
-    per: "per month · cancel anytime",
-    monthly: 285,
-    features: ["Everything in One-Time", "Monthly program refresh", "Group community access", "No commitment"],
-  },
-  {
-    id: "gold",
-    name: "Gold",
-    sub: "3-Month Builder",
-    price: 275,
-    per: "per month · 3 months",
-    monthly: 275,
-    features: ["Everything in Basic", "Form check video reviews", "Priority messaging", "Lower monthly rate"],
-  },
-  {
-    id: "platinum",
-    name: "Platinum",
-    sub: "6-Month Transform",
-    price: 250,
-    per: "per month · 6 months",
+    id: "standard",
+    name: "Standard Coaching",
+    sub: "Ongoing coaching",
     monthly: 250,
-    features: ["Everything in Gold", "Full recomposition roadmap", "Quarterly progress audits", "Best monthly rate"],
+    pifMonthly: 200,
+    features: [
+      "Everything in One-Time — month after month",
+      "Messaging with a response within 24–48 hrs",
+      "Check-ins 2× a month — 1st & 3rd Monday",
+      "Monthly 15-min 1:1 coaching call",
+      "Program & nutrition updated 2× a month from your check-ins",
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro Coaching",
+    sub: "High access · high accountability",
+    monthly: 350,
+    pifMonthly: 300,
+    features: [
+      "Everything in Standard",
+      "Priority messaging — same-day response (within 24 hrs)",
+      "Weekly check-ins — every Monday",
+      "Weekly 15-min 1:1 coaching call",
+      "Program & nutrition updated every week",
+      "Priority scheduling for in-person sessions",
+    ],
   },
 ];
-const ADDON = { name: "In-person training session", price: 100, note: "Available on every plan · one-on-one with your trainer each week" };
+const money = (n) => (n % 1 ? n.toFixed(2) : n.toLocaleString("en-US"));
+/* what's due now for a plan + billing choice */
+const planCharge = (p, billing) => {
+  if (!p) return null;
+  if (p.flat) return { amount: p.price, label: p.id === "basic" ? "one-time" : "flat · one month" };
+  if (billing === "pif") return { amount: p.pifMonthly * PIF_MONTHS, label: `paid in full · ${PIF_MONTHS} months ($${money(p.pifMonthly)}/mo)` };
+  return { amount: p.monthly, label: "per month · cancel anytime" };
+};
+const ADDON = { name: "In-person training session", price: 100, note: "Add to One-Time or any coaching plan · one-on-one with Payton each week" };
 
 /* ---------- AI platform logos (tiny inline SVGs) ---------- */
 const GoogleLogo = ({ s = 14 }) => (
@@ -770,7 +796,7 @@ const clientPinLogin = (pin, extraClients) => {
 };
 
 /* ---------- SEO / GEO content (rendered in footer + JSON-LD) ---------- */
-const SEO_DESC = "PD Performance is an online personal training program: a customizable muscle-building split, an optional Hyrox/CrossFit-style conditioning day, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Free to join — coaching plans from $250/month.";
+const SEO_DESC = "PD Performance is an online personal training program: a customizable muscle-building split, an optional Hyrox/CrossFit-style conditioning day, AI-built custom workout splits and diet plans, accountability tracking, and optional in-person coaching. Get the app and AI coach for a one-time $4.99, or work with Payton directly — one month for $300, or ongoing coaching from $200/month.";
 const FAQS = [
   {
     q: "What is PD Performance?",
@@ -778,7 +804,7 @@ const FAQS = [
   },
   {
     q: "How much does online personal training with PD Performance cost?",
-    a: "Most of the app is free forever — the training log, community, weekly split, and progress tracking. PD Plus ($29/month) adds AI-built custom splits and meal plans, PDF exports, and partner discounts. Personal coaching runs $250 to $300 per month depending on commitment, and weekly one-on-one in-person training can be added to any coaching plan for $100/month.",
+    a: "Basic is a one-time $4.99: the full app with an AI coach that builds your splits and meal plans — no direct access to Payton and no community chat. One-Time is $300 for one month of direct coaching with a personalized program and nutrition plan. Standard Coaching is $250/month, or $200/month when you pay 6 months in full; Pro Coaching (weekly check-ins, weekly calls, same-day messaging) is $350/month, or $300/month paid in full. Weekly in-person training can be added to One-Time or any coaching plan for $100/month.",
   },
   {
     q: "Do I get a custom workout and diet plan?",
@@ -5186,41 +5212,6 @@ const FaqItem = ({ q, a }) => (
   </details>
 );
 
-function AboutPage({ onStart }) {
-  const bullets = [
-    ["The program", "A push/pull muscle-building split you can run 3 to 6 days a week, with an optional Hyrox/CrossFit-style conditioning day for people who want an engine, not just a physique."],
-    ["The app", "Custom split builder, personalized diet plans built around foods you actually eat, weigh-in and photo tracking, daily commitments with streaks, and a private group feed."],
-    ["The coaching", "Your trainer posts video demos, reviews your progress, and is available for weekly one-on-one in-person sessions on any plan."],
-    ["The AI", "A built-in coaching engine answers questions and builds your split and diet instantly — and you can connect your favorite AI platform (ChatGPT, Claude, Gemini, and more) for deeper dives."],
-  ];
-  return (
-    <div className="space-y-5">
-      <Card>
-        <Eyebrow>About PD Performance</Eyebrow>
-        <p style={{ ...fontBody, color: PAPER, fontSize: 15, lineHeight: 1.7, marginTop: 12 }}>
-          PD Performance is an online personal training program built on one idea: consistency beats complexity. No gimmicks, no 45-supplement stacks — a proven training split, food you'll actually eat, and accountability that keeps you showing up.
-        </p>
-        <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.7, marginTop: 10 }}>
-          Whether your goal is fat loss, building muscle, recomposition, or Hyrox/CrossFit and endurance performance, the program meets you where you are and scales with you.
-        </p>
-      </Card>
-      <Card>
-        <Eyebrow>How it works</Eyebrow>
-        <div className="mt-3 space-y-3">
-          {bullets.map(([t, d]) => (
-            <div key={t}>
-              <div style={{ ...fontDisplay, color: PAPER, fontSize: 13, letterSpacing: "0.08em" }} className="uppercase">{t}</div>
-              <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.6, marginTop: 4, marginBottom: 0 }}>{d}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-5">
-          <Btn onClick={onStart}>Start in the app <ChevronRight size={14} /></Btn>
-        </div>
-      </Card>
-    </div>
-  );
-}
 
 function FaqPage({ onStart }) {
   return (
@@ -5250,112 +5241,177 @@ function FaqPage({ onStart }) {
   );
 }
 
-function PricingPage({ plan, setPlan, profile, setProfile, trainerCfg, addBooking }) {
-  const total = (p) => p.monthly + (profile.addon ? ADDON.price : 0);
-  const payVenmo = (p) => {
+function PricingPage({ plan, setPlan, profile, setProfile, trainerCfg, addBooking, onStart }) {
+  const selected = plan ? PLANS.find((p) => p.id === plan.id) : null;
+  const billing = plan?.billing === "pif" ? "pif" : "monthly";
+  const addonOn = !!profile.addon && selected && !selected.noAddon;
+  const charge = planCharge(selected, billing);
+  const dueNow = charge ? charge.amount + (addonOn ? ADDON.price : 0) : 0;
+  const pick = (id, b) => setPlan({ id, billing: b || billing, addon: profile.addon });
+  const payVenmo = () => {
     const handle = trainerCfg.venmo || "your-trainer";
-    const note = encodeURIComponent(`${p.name} plan${profile.addon ? " + trainer access" : ""}`);
-    window.open(`https://venmo.com/u/${handle}?txn=pay&amount=${total(p)}&note=${note}`, "_blank");
+    const note = encodeURIComponent(`${selected.name}${selected.flat ? "" : billing === "pif" ? " (paid in full, 6 mo)" : " (monthly)"}${addonOn ? " + in-person training" : ""}`);
+    window.open(`https://venmo.com/u/${handle}?txn=pay&amount=${dueNow}&note=${note}`, "_blank");
   };
-  const payStripe = (p) => {
+  const payStripe = () => {
     if (trainerCfg.stripe) window.open(trainerCfg.stripe, "_blank");
     else alert("Your trainer hasn't connected a Stripe payment link yet. Use Venmo for now.");
   };
   const toggleAddon = () => {
+    if (selected && selected.noAddon) return;
     const np = { ...profile, addon: !profile.addon };
     setProfile(np);
     if (plan) setPlan({ ...plan, addon: np.addon });
   };
-  const selected = plan ? PLANS.find((p) => p.id === plan.id) : null;
+  const yes = <Check size={13} color={GREEN} strokeWidth={3} />;
+  const no = <X size={13} color={MUTED} />;
+  const ROWS = [
+    ["App & AI coach", yes, yes, yes, yes],
+    ["Community chat", no, yes, yes, yes],
+    ["Access to Payton", no, "1 mo", "Ongoing", "Priority"],
+    ["Plan by Payton", no, yes, yes, yes],
+    ["Check-ins", no, "Weekly", "2×/mo", "Weekly"],
+    ["1:1 call", no, no, "Monthly", "Weekly"],
+    ["Plan updates", "AI", "Once", "2×/mo", "Weekly"],
+    ["Replies", no, "24–48h", "24–48h", "Same day"],
+    ["In-person add-on", no, yes, yes, yes],
+  ];
+  const cellText = { ...fontBody, color: PAPER, fontSize: 10.5, textAlign: "center", padding: "8px 2px", lineHeight: 1.25 };
+  const priceLine = (p) => p.flat
+    ? <><span style={{ ...fontMono, fontSize: 22 }}>${money(p.price)}</span><div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{p.per}</div></>
+    : <><span style={{ ...fontMono, fontSize: 22 }}>${money(p.monthly)}</span><span style={{ ...fontBody, color: MUTED, fontSize: 11 }}>/mo</span>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>or ${money(p.pifMonthly)}/mo paid in full</div></>;
   return (
     <div className="space-y-5">
       <Card>
-        <Eyebrow>Membership · Pricing</Eyebrow>
-        <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
-          Most of PD Performance is free — forever. You pay only for the personal side: custom programming, real coaching, and the accountability that gets results. Tap a plan to select it.
+        <Eyebrow>About PD Performance</Eyebrow>
+        <p style={{ ...fontBody, color: PAPER, fontSize: 15, lineHeight: 1.7, marginTop: 12 }}>
+          PD Performance is an online personal training program built on one idea: consistency beats complexity. A proven training split, food you'll actually eat, and accountability that keeps you showing up.
         </p>
-        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 14, marginTop: 14 }}>
-          <div className="flex items-start justify-between">
-            <div>
-              <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">Free</div>
-              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>PD Athlete — free forever</div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.7, marginTop: 10, marginBottom: 0 }}>
+          Every plan includes the full app. The difference between plans is how much of Payton you get — from an AI coach that builds everything for you, to weekly check-ins, calls, and a program rewritten around your progress.
+        </p>
+      </Card>
+
+      <Card>
+        <Eyebrow>How each plan works</Eyebrow>
+        <div className="mt-3 space-y-3">
+          {[
+            ["Basic · $4.99 one-time", "You get the app and the AI as your coach. It builds your weekly split and meal plan, adjusts them when you ask, and answers your training and nutrition questions. You run it yourself — there's no direct access to Payton and no community chat."],
+            ["One-Time · $300 for one month", "A month working directly with Payton. He writes your personalized training program and nutrition plan, checks in with you weekly, and answers your messages. You're in the community chat. It doesn't renew — after the month you keep the app and AI coach."],
+            ["Standard Coaching · ongoing", "Everything in One-Time, month after month. Check-ins on the 1st and 3rd Monday, a monthly 15-minute call, and your program and nutrition updated twice a month from your check-ins."],
+            ["Pro Coaching · high accountability", "The closest Payton works with anyone. Weekly check-ins every Monday, a weekly 15-minute call, same-day messaging, your plan updated every week, and priority scheduling for in-person sessions."],
+          ].map(([t, d]) => (
+            <div key={t} style={{ borderLeft: `2px solid ${RED}`, paddingLeft: 10 }}>
+              <div style={{ ...fontDisplay, color: PAPER, fontSize: 13, letterSpacing: "0.06em" }} className="uppercase">{t}</div>
+              <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.6, marginTop: 4, marginBottom: 0 }}>{d}</p>
             </div>
-            <div className="text-right">
-              <div style={{ ...fontMono, color: PAPER, fontSize: 22 }}>$0</div>
-            </div>
-          </div>
-          <ul className="mt-2 space-y-1">
-            {["The full app: daily log, streaks & tracking", "Community — posts, comments & support", "The proven weekly split & exercise library", "Weigh-ins, photos & body comp check"].map((f) => (
-              <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
-                <Check size={12} color={RED} /> {f}
-              </li>
-            ))}
-          </ul>
-          <div style={{ ...fontDisplay, color: MUTED, fontSize: 10, letterSpacing: "0.15em", marginTop: 8 }} className="uppercase">You're already on it</div>
+          ))}
         </div>
+        <div style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, padding: "10px 12px", marginTop: 14 }}>
+          <div style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.14em" }} className="uppercase">Monthly or paid in full</div>
+          <p style={{ ...fontBody, color: PAPER, fontSize: 12.5, lineHeight: 1.6, margin: "4px 0 0" }}>
+            Coaching plans bill month-to-month and you can cancel anytime. Or pay for {PIF_MONTHS} months up front and your monthly rate drops — Standard goes from $250 to $200 a month, Pro from $350 to $300.
+          </p>
+        </div>
+      </Card>
+
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "18px 18px 6px" }}><Eyebrow>Compare plans</Eyebrow></div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <colgroup><col style={{ width: "29%" }} /><col /><col /><col /><col /></colgroup>
+            <thead>
+              <tr>
+                <th />
+                {PLANS.map((p) => (
+                  <th key={p.id} style={{ ...fontDisplay, color: plan?.id === p.id ? RED : PAPER, fontSize: 10, letterSpacing: "0.04em", padding: "8px 2px", fontWeight: 600 }} className="uppercase">
+                    {p.name.replace(" Coaching", "")}
+                    <div style={{ ...fontMono, color: MUTED, fontSize: 10, letterSpacing: 0, fontWeight: 400, marginTop: 2, textTransform: "none" }}>
+                      {p.flat ? `$${money(p.price)}` : `from $${p.pifMonthly}`}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map(([label, ...vals], ri) => (
+                <tr key={label} style={{ borderTop: `1px solid ${LINE}`, background: ri % 2 ? "transparent" : SURFACE2 }}>
+                  <td style={{ ...fontBody, color: MUTED, fontSize: 11, padding: "8px 4px 8px 14px", lineHeight: 1.25 }}>{label}</td>
+                  {vals.map((v, i) => (
+                    <td key={i} style={cellText}>{typeof v === "string" ? v : <span style={{ display: "inline-flex" }}>{v}</span>}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card>
+        <Eyebrow>Choose your plan</Eyebrow>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>Tap a plan to select it. You can switch anytime.</p>
         <div className="space-y-3 mt-3">
           {PLANS.map((p) => {
             const active = plan?.id === p.id;
             return (
-              <div key={p.id} onClick={() => setPlan({ id: p.id, addon: profile.addon })}
+              <div key={p.id} onClick={() => pick(p.id)}
                 style={{ background: active ? SURFACE2 : "transparent", border: `1px solid ${active ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div>
                     <div style={{ ...fontDisplay, color: PAPER, fontSize: 18, letterSpacing: "0.05em" }} className="uppercase">{p.name}</div>
                     <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{p.sub}</div>
                   </div>
-                  <div className="text-right">
-                    <div style={{ ...fontMono, color: active ? RED : PAPER, fontSize: 22 }}>${p.price}</div>
-                    <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{p.per}</div>
-                  </div>
+                  <div className="text-right" style={{ color: active ? RED : PAPER, flexShrink: 0 }}>{priceLine(p)}</div>
                 </div>
                 <ul className="mt-2 space-y-1">
                   {p.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
-                      <Check size={12} color={RED} /> {f}
+                    <li key={f} className="flex items-start gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12 }}>
+                      <Check size={12} color={RED} style={{ marginTop: 2, flexShrink: 0 }} /> {f}
+                    </li>
+                  ))}
+                  {(p.excludes || []).map((f) => (
+                    <li key={f} className="flex items-start gap-2" style={{ ...fontBody, color: MUTED, fontSize: 12, opacity: 0.75 }}>
+                      <X size={12} color={MUTED} style={{ marginTop: 2, flexShrink: 0 }} /> {f}
                     </li>
                   ))}
                 </ul>
+                {p.store && <p style={{ ...fontBody, color: MUTED, fontSize: 11, margin: "8px 0 0" }}>{p.store}</p>}
+                {active && !p.flat && (
+                  <div className="flex mt-3" onClick={(e) => e.stopPropagation()} style={{ border: `1px solid ${LINE}`, borderRadius: 99, overflow: "hidden" }}>
+                    {[["monthly", `Monthly · $${money(p.monthly)}/mo`], ["pif", `Paid in full · $${money(p.pifMonthly)}/mo`]].map(([b, lab]) => (
+                      <button key={b} onClick={() => pick(p.id, b)} className="uppercase"
+                        style={{ flex: 1, ...fontDisplay, fontSize: 10.5, letterSpacing: "0.08em", padding: "8px 6px", border: "none", cursor: "pointer",
+                          background: billing === b ? RED : "transparent", color: billing === b ? "#fff" : MUTED }}>
+                        {lab}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {active && !p.flat && billing === "pif" && (
+                  <p style={{ ...fontBody, color: GREEN, fontSize: 11.5, margin: "8px 0 0" }}>
+                    ${money(p.pifMonthly * PIF_MONTHS)} for {PIF_MONTHS} months — you save ${money((p.monthly - p.pifMonthly) * PIF_MONTHS)}.
+                  </p>
+                )}
                 {active && (
-                  <div style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.15em", marginTop: 8 }} className="uppercase">Current plan</div>
+                  <div style={{ ...fontDisplay, color: RED, fontSize: 11, letterSpacing: "0.15em", marginTop: 8 }} className="uppercase">Selected</div>
                 )}
               </div>
             );
           })}
         </div>
 
-        {/* payment */}
-        {selected && (
-          <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
-            <div className="flex items-baseline justify-between">
-              <Eyebrow>Due now</Eyebrow>
-              <div style={{ ...fontMono, color: PAPER, fontSize: 28 }}>
-                ${total(selected)}
-                <span style={{ fontSize: 12, color: MUTED }}> {selected.flat ? "flat" : "/mo"}</span>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-3 flex-wrap">
-              <Btn onClick={() => payVenmo(selected)} style={{ flex: 1, justifyContent: "center", minWidth: 140 }}>
-                Pay with Venmo
-              </Btn>
-              <Btn variant="ghost" onClick={() => payStripe(selected)} style={{ flex: 1, justifyContent: "center", minWidth: 140 }}>
-                <CreditCard size={14} /> Card (Stripe)
-              </Btn>
-            </div>
-          </div>
-        )}
-
         {/* in-person session add-on */}
         <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
           <div onClick={toggleAddon} className="flex items-center justify-between gap-3"
-            style={{ border: `1px dashed ${profile.addon ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
+            style={{ border: `1px dashed ${addonOn ? RED : LINE}`, borderRadius: 12, padding: 14, cursor: selected && selected.noAddon ? "default" : "pointer", opacity: selected && selected.noAddon ? 0.45 : 1 }}>
             <div>
               <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600 }}>{ADDON.name}</div>
-              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{ADDON.note}</div>
+              <div style={{ ...fontBody, color: MUTED, fontSize: 12 }}>{selected && selected.noAddon ? "Not available on Basic — pick One-Time or a coaching plan" : ADDON.note}</div>
             </div>
-            <div style={{ ...fontMono, color: profile.addon ? RED : PAPER, fontSize: 16, whiteSpace: "nowrap" }}>+${ADDON.price}/mo</div>
+            <div style={{ ...fontMono, color: addonOn ? RED : PAPER, fontSize: 16, whiteSpace: "nowrap" }}>+${ADDON.price}/mo</div>
           </div>
-          {profile.addon && (
+          {addonOn && (
             <div className="mt-3">
               <Btn
                 onClick={() => {
@@ -5373,6 +5429,28 @@ function PricingPage({ plan, setPlan, profile, setProfile, trainerCfg, addBookin
             </div>
           )}
         </div>
+
+        {/* payment */}
+        {selected && (
+          <div className="mt-5" style={{ borderTop: `1px solid ${LINE}`, paddingTop: 16 }}>
+            <div className="flex items-baseline justify-between gap-3">
+              <Eyebrow>Due now</Eyebrow>
+              <div className="text-right">
+                <div style={{ ...fontMono, color: PAPER, fontSize: 28 }}>${money(dueNow)}</div>
+                <div style={{ ...fontBody, color: MUTED, fontSize: 11 }}>{selected.name} · {charge.label}{addonOn ? ` + $${ADDON.price} in-person (monthly)` : ""}</div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-3 flex-wrap">
+              <Btn onClick={payVenmo} style={{ flex: 1, justifyContent: "center", minWidth: 140 }}>Pay with Venmo</Btn>
+              <Btn variant="ghost" onClick={payStripe} style={{ flex: 1, justifyContent: "center", minWidth: 140 }}><CreditCard size={14} /> Card (Stripe)</Btn>
+            </div>
+          </div>
+        )}
+        {onStart && (
+          <div className="mt-5">
+            <Btn variant="ghost" onClick={onStart}>Start in the app <ChevronRight size={14} /></Btn>
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -5642,7 +5720,10 @@ export default function App() {
           applicationCategory: "HealthApplication",
           operatingSystem: "Web",
           description: SEO_DESC,
-          offers: PLANS.map((p) => ({ "@type": "Offer", name: `${p.name} — ${p.sub}`, price: String(p.price), priceCurrency: "USD" })),
+          offers: PLANS.flatMap((p) => p.flat
+            ? [{ "@type": "Offer", name: `${p.name} — ${p.sub}`, price: String(p.price), priceCurrency: "USD" }]
+            : [{ "@type": "Offer", name: `${p.name} — monthly`, price: String(p.monthly), priceCurrency: "USD" },
+               { "@type": "Offer", name: `${p.name} — ${PIF_MONTHS} months paid in full`, price: String(p.pifMonthly * PIF_MONTHS), priceCurrency: "USD" }]),
         },
         {
           "@type": "FAQPage",
@@ -5768,7 +5849,7 @@ export default function App() {
                 <X size={15} color={PAPER} />
               </button>
             </div>
-            {[["home", "Home"], ["about", "About"], ["faq", "FAQ"], ["pricing", "Pricing"]].map(([id, label]) => (
+            {[["home", "Home"], ["pricing", "About & Pricing"], ["faq", "FAQ"]].map(([id, label]) => (
               <button key={id} onClick={() => { setPage(id); setShowMenu(false); }}
                 className="flex items-center justify-between w-full"
                 style={{ ...fontDisplay, fontSize: 13, letterSpacing: "0.14em", background: page === id ? SURFACE2 : "none", border: "none", borderLeft: `3px solid ${page === id ? RED : "transparent"}`, borderRadius: 10, cursor: "pointer", padding: "11px 12px", color: page === id ? RED : PAPER, textAlign: "left" }}
@@ -5848,23 +5929,18 @@ export default function App() {
           </div>
         ) : page !== "home" ? (
           <>
-            {page === "about" && (
+            {page === "faq" && <FaqPage onStart={() => setPage("pricing")} />}
+            {(page === "pricing" || page === "about") && (
               <>
-                <AboutPage onStart={() => { setPage("home"); setTab("profile"); }} />
+                <PricingPage plan={plan} setPlan={setPlan} profile={profile} setProfile={setProfile}
+                  trainerCfg={trainerCfg} addBooking={addBooking} onStart={() => { setPage("home"); setTab("profile"); }} />
                 <footer style={{ marginTop: 36, borderTop: `1px solid ${LINE}`, paddingTop: 18 }}>
-                  <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>
-                    {SEO_DESC}
-                  </p>
+                  <p style={{ ...fontBody, color: MUTED, fontSize: 12, lineHeight: 1.6, marginTop: 0 }}>{SEO_DESC}</p>
                   <p style={{ ...fontBody, color: MUTED, fontSize: 11, marginTop: 10 }}>
                     PD Performance · Online personal training, optional Hyrox/CrossFit-style conditioning, custom workout splits & diet plans
                   </p>
                 </footer>
               </>
-            )}
-            {page === "faq" && <FaqPage onStart={() => setPage("pricing")} />}
-            {page === "pricing" && (
-              <PricingPage plan={plan} setPlan={setPlan} profile={profile} setProfile={setProfile}
-                trainerCfg={trainerCfg} addBooking={addBooking} />
             )}
           </>
         ) : (
