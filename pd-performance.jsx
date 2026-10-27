@@ -3,7 +3,8 @@ import {
   User, Dumbbell, Utensils, CheckSquare, MessageCircle, Lock, Unlock,
   Play, Plus, Trash2, ChevronRight, Flame, Sparkles, CreditCard, Users,
   RefreshCw, Check, X, Video, Settings, Camera, Heart, ImagePlus, Scale, Bell, CalendarDays,
-  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical, ZoomIn, ZoomOut, ChevronLeft, Mic
+  Sun, Moon, Link2, Download, Menu, ClipboardList, Pencil, Send, ChevronUp, ChevronDown, RotateCcw, GripVertical, ZoomIn, ZoomOut, ChevronLeft, Mic,
+  ArrowUpRight, Smartphone, Calculator
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 
@@ -16,7 +17,7 @@ const PAPER = "var(--paper)";
 const RED = "var(--red)";
 const MUTED = "var(--muted)";
 
-const fontDisplay = { fontFamily: "'Oswald', sans-serif" };
+const fontDisplay = { fontFamily: "'Oswald', sans-serif", fontWeight: 600 };
 const fontBody = { fontFamily: "'Inter', sans-serif" };
 const fontMono = { fontFamily: "'IBM Plex Mono', monospace" };
 
@@ -1913,8 +1914,8 @@ function ProfileTab({ profile, setProfile, posts, setPosts }) {
           {GRID_HINTS.slice(0, Math.max(0, 6 - posts.length)).map(([tg, hint]) => (
             <button key={hint} onClick={() => setComposeTag(tg)}
               style={{ aspectRatio: "1", borderRadius: 8, background: "transparent", border: `1px dashed ${LINE}`, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: 6 }}>
-              <Plus size={14} color={MUTED} style={{ opacity: 0.55 }} />
-              <span style={{ ...fontBody, color: MUTED, fontSize: 10, textAlign: "center", opacity: 0.65, lineHeight: 1.35 }}>{hint}</span>
+              <Plus size={14} color={MUTED} />
+              <span style={{ ...fontBody, color: MUTED, fontSize: 10, textAlign: "center", lineHeight: 1.35 }}>{hint}</span>
             </button>
           ))}
         </div>
@@ -5459,7 +5460,534 @@ function PricingPage({ plan, setPlan, profile, setProfile, trainerCfg, addBookin
 /* ====================================================================== */
 /* APP SHELL                                                              */
 /* ====================================================================== */
+
+/* ====================================================================== */
+/* PUBLIC WEBSITE — what browser visitors see (the app opens from here;   */
+/* launched from the home screen it goes straight into the app)           */
+/* ====================================================================== */
+
+/* Fill these in once and they show up everywhere on the site (apply form, payments, booking). */
+const SITE_CONTACT = {
+  phone: "",      // e.g. "8015551234" — applications & consult requests text this number
+  email: "",      // used if no phone is set
+  venmo: "",      // Venmo username (no @)
+  stripe: "",     // a Stripe payment link
+  calendar: "",   // booking link (Calendly etc.) for consultation calls
+};
+const CONSULT = { minutes: 45, price: 75 };
+const SITE_COACH_PHOTO = "";   // e.g. "./assets/payton.jpg"
+const SITE_RESULTS = [];       // { name, quote, photo } — add real client results here and the Results section appears
+
+const COACHING_FAQ = [
+  { q: "What's the difference between Standard and Pro Coaching?", a: "Both are fully personalized — your training program and nutrition plan are built by Payton around you. The difference is how closely we work together. Standard checks in twice a month with a monthly call; Pro checks in every week, has a weekly call, same-day messaging, and your plan updated every week." },
+  { q: "Will my training and nutrition still be personalized on Standard?", a: "Yes. Every coaching plan gets a program and nutrition plan written for you. Standard just reviews and adjusts it twice a month instead of weekly." },
+  { q: "Can I upgrade from Standard to Pro later?", a: "Anytime. Most people start where their schedule fits and move up when they want tighter accountability. You can switch plans whenever you like." },
+  { q: "How do check-ins work?", a: "On your check-in Monday you fill out a short check-in in the app — weight, sleep, energy, wins and struggles, plus photos. Payton reviews it and adjusts your training and nutrition from there." },
+  { q: "What does paying in full get me?", a: "A lower monthly rate. Pay for 6 months up front and Standard drops from $250 to $200 a month, Pro from $350 to $300. Month-to-month plans can be cancelled anytime." },
+  { q: "What's the $4.99 Basic plan?", a: "The app on its own, with the AI as your coach. It builds your weekly split and meal plan, adjusts them when you ask, and answers your questions. There's no direct access to Payton and no community chat." },
+  { q: "Which option is right for me?", a: "If you're self-motivated and want a professional plan with regular check-ins, start with Standard. If you want someone in your corner every week, go Pro. Not sure yet? Book a consultation call or try One-Time for a month." },
+  { q: "How do I get started?", a: "Apply below. Payton reviews every application personally and reaches out to set up your plan and get you into the app." },
+];
+
+/* section heading in the site style: big Oswald, last words in red */
+function SiteH2({ children, accent, center, as: Tag = "h2" }) {
+  return (
+    <Tag style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: "clamp(32px, 6vw, 54px)", lineHeight: 1.02, letterSpacing: "0.005em", margin: 0, textAlign: center ? "center" : "left" }} className="uppercase">
+      {children}{accent && <> <span style={{ color: RED }}>{accent}</span></>}
+    </Tag>
+  );
+}
+const SiteKicker = ({ children, center }) => (
+  <div style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 700, letterSpacing: "0.14em", marginBottom: 12, textAlign: center ? "center" : "left" }} className="uppercase">{children}</div>
+);
+const SiteLead = ({ children, center, style }) => (
+  <p style={{ ...fontBody, color: MUTED, fontSize: "clamp(15px, 2.2vw, 17.5px)", lineHeight: 1.65, margin: center ? "14px auto 0" : "14px 0 0", maxWidth: 640, textAlign: center ? "center" : "left", ...style }}>{children}</p>
+);
+const SiteSection = ({ id, children, style }) => (
+  <section id={id} style={{ borderTop: `1px solid ${LINE}`, padding: "clamp(64px, 10vw, 112px) 0", scrollMarginTop: 64, ...style }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 20px" }}>{children}</div>
+  </section>
+);
+const SiteBtn = ({ children, onClick, href, solid = true, style }) => {
+  const s = { ...fontBody, fontWeight: 700, fontSize: 15, padding: "14px 22px", borderRadius: 10, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, textDecoration: "none",
+    background: solid ? RED : "transparent", color: solid ? "#fff" : PAPER, border: `1.5px solid ${solid ? RED : LINE}`, ...style };
+  return href ? <a href={href} style={s}>{children}</a> : <button onClick={onClick} style={s}>{children}</button>;
+};
+const CheckLi = ({ children, muted }) => (
+  <li className="flex items-start gap-3" style={{ ...fontBody, color: muted ? MUTED : PAPER, fontSize: 15, lineHeight: 1.5 }}>
+    <Check size={16} color={RED} strokeWidth={3} style={{ marginTop: 3, flexShrink: 0 }} /> <span>{children}</span>
+  </li>
+);
+
+/* phone frame around a real app screenshot */
+function PhoneShot({ src, caption, tilt = 0 }) {
+  return (
+    <figure style={{ margin: 0, textAlign: "center" }}>
+      <div style={{ width: "100%", maxWidth: 290, margin: "0 auto", borderRadius: 38, padding: 9, background: "#000", border: "1.5px solid #2c2c31",
+        boxShadow: "0 30px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset", transform: tilt ? `rotate(${tilt}deg)` : undefined }}>
+        <div style={{ borderRadius: 30, overflow: "hidden", aspectRatio: "390 / 780", background: "#0A0A0B" }}>
+          <img src={src} alt={caption || "pd / performance app"} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", display: "block" }} />
+        </div>
+      </div>
+      {caption && <figcaption style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 22, marginTop: 18 }} className="uppercase">{caption}</figcaption>}
+    </figure>
+  );
+}
+
+/* free calories & macros calculator */
+function MacroCalculator({ onOpenApp }) {
+  const [f, setF] = useState({ sex: "male", age: "28", ft: "5", inch: "10", lb: "180", act: "1.55", goal: "lose" });
+  const up = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const kg = (parseFloat(f.lb) || 0) * 0.4536;
+  const cm = ((parseFloat(f.ft) || 0) * 12 + (parseFloat(f.inch) || 0)) * 2.54;
+  const age = parseFloat(f.age) || 0;
+  const ok = kg > 30 && cm > 120 && age >= 14;
+  const bmr = 10 * kg + 6.25 * cm - 5 * age + (f.sex === "male" ? 5 : -161);
+  const tdee = bmr * parseFloat(f.act);
+  const cals = Math.round((f.goal === "lose" ? tdee * 0.8 : f.goal === "gain" ? tdee * 1.1 : tdee) / 10) * 10;
+  const protein = Math.round((parseFloat(f.lb) || 0) * (f.goal === "gain" ? 0.9 : 1));
+  const fat = Math.round((cals * 0.25) / 9);
+  const carbs = Math.max(0, Math.round((cals - protein * 4 - fat * 9) / 4));
+  const lab = { ...fontBody, color: MUTED, fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 };
+  const sel = { ...inputStyle, fontSize: 15, padding: "11px 12px" };
+  return (
+    <div className="grid md:grid-cols-2 gap-6" style={{ marginTop: 40 }}>
+      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 18, padding: 22 }}>
+        <div className="grid grid-cols-2 gap-4">
+          <label><span style={lab}>Sex</span><select style={sel} value={f.sex} onChange={up("sex")}><option value="male">Male</option><option value="female">Female</option></select></label>
+          <label><span style={lab}>Age</span><input style={sel} inputMode="numeric" value={f.age} onChange={up("age")} /></label>
+          <label><span style={lab}>Height</span>
+            <div className="flex gap-2"><input style={sel} inputMode="numeric" value={f.ft} onChange={up("ft")} aria-label="Feet" /><input style={sel} inputMode="numeric" value={f.inch} onChange={up("inch")} aria-label="Inches" /></div>
+            <span style={{ ...fontBody, color: MUTED, fontSize: 11.5 }}>feet · inches</span>
+          </label>
+          <label><span style={lab}>Weight (lb)</span><input style={sel} inputMode="decimal" value={f.lb} onChange={up("lb")} /></label>
+        </div>
+        <label style={{ display: "block", marginTop: 16 }}><span style={lab}>Activity</span>
+          <select style={sel} value={f.act} onChange={up("act")}>
+            <option value="1.2">Mostly sitting, little exercise</option>
+            <option value="1.375">Light — training 1–3 days a week</option>
+            <option value="1.55">Moderate — training 3–5 days a week</option>
+            <option value="1.725">Very active — training 6–7 days a week</option>
+            <option value="1.9">Athlete / physical job + training</option>
+          </select>
+        </label>
+        <div style={{ marginTop: 16 }}><span style={lab}>Goal</span>
+          <div className="grid grid-cols-3 gap-2">
+            {[["lose", "Lose fat"], ["maintain", "Maintain"], ["gain", "Build muscle"]].map(([v, t]) => (
+              <button key={v} onClick={() => setF({ ...f, goal: v })}
+                style={{ ...fontBody, fontWeight: 700, fontSize: 13.5, padding: "11px 6px", borderRadius: 10, cursor: "pointer", border: `1.5px solid ${f.goal === v ? RED : LINE}`, background: f.goal === v ? RED : "transparent", color: f.goal === v ? "#fff" : PAPER }}>{t}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{ background: SURFACE, border: `1px solid ${RED}`, borderRadius: 18, padding: 22, display: "flex", flexDirection: "column" }}>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 13, fontWeight: 700, letterSpacing: "0.12em" }} className="uppercase">Your daily target</div>
+        <div style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 64, lineHeight: 1, marginTop: 10 }}>{ok ? cals.toLocaleString() : "—"}<span style={{ fontSize: 22, color: MUTED, marginLeft: 8 }}>calories</span></div>
+        <div className="grid grid-cols-3 gap-3" style={{ marginTop: 22 }}>
+          {[["Protein", protein], ["Carbs", carbs], ["Fat", fat]].map(([t, g]) => (
+            <div key={t} style={{ background: SURFACE2, border: `1px solid ${LINE}`, borderRadius: 12, padding: "14px 10px", textAlign: "center" }}>
+              <div style={{ ...fontDisplay, fontWeight: 700, color: RED, fontSize: 30, lineHeight: 1 }}>{ok ? g : "—"}<span style={{ fontSize: 15 }}>g</span></div>
+              <div style={{ ...fontBody, color: PAPER, fontSize: 13, fontWeight: 600, marginTop: 6 }}>{t}</div>
+            </div>
+          ))}
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13, lineHeight: 1.6, marginTop: 18 }}>
+          A starting point, not a prescription — protein around 1 g per pound, fats about a quarter of your calories, and the rest carbs. Track for two weeks and adjust from the trend.
+        </p>
+        <div style={{ marginTop: "auto", paddingTop: 10 }}>
+          <SiteBtn onClick={() => onOpenApp("fuel")}>Build my full meal plan <ChevronRight size={16} /></SiteBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* coaching application — sent straight to Payton */
+function ApplyForm({ initialPlan }) {
+  const [a, setA] = useState({ name: "", contact: "", plan: initialPlan || "Not sure yet", goal: "Lose fat", days: "4", note: "" });
+  const [msg, setMsg] = useState("");
+  useEffect(() => { if (initialPlan) setA((x) => ({ ...x, plan: initialPlan })); }, [initialPlan]);
+  const up = (k) => (e) => setA({ ...a, [k]: e.target.value });
+  const lab = { ...fontBody, color: PAPER, fontSize: 14, fontWeight: 600, display: "block", marginBottom: 7 };
+  const box = { ...inputStyle, fontSize: 15, padding: "12px 13px" };
+  const send = async () => {
+    if (!a.name.trim() || !a.contact.trim()) { setMsg("Add your name and a phone number or email so Payton can reach you."); return; }
+    const body = `PD Performance coaching application\nName: ${a.name}\nContact: ${a.contact}\nPlan: ${a.plan}\nGoal: ${a.goal}\nCan train: ${a.days} days/week\n${a.note.trim() ? `About me: ${a.note.trim()}` : ""}`.trim();
+    if (SITE_CONTACT.phone) { window.location.href = `sms:${SITE_CONTACT.phone.replace(/[^+\d]/g, "")}&body=${encodeURIComponent(body)}`; setMsg("Your text is ready — hit send and Payton will reach out."); return; }
+    if (SITE_CONTACT.email) { window.location.href = `mailto:${SITE_CONTACT.email}?subject=${encodeURIComponent("Coaching application — " + a.name)}&body=${encodeURIComponent(body)}`; setMsg("Your email is ready — hit send and Payton will reach out."); return; }
+    try { await navigator.clipboard.writeText(body); } catch (e) {}
+    setMsg("Application copied — send it to Payton by text or DM and he'll reach out.");
+  };
+  return (
+    <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 20, padding: "clamp(20px, 4vw, 34px)", maxWidth: 760, margin: "40px auto 0", boxShadow: "0 0 80px rgba(217,4,41,0.10)" }}>
+      <div className="grid md:grid-cols-2 gap-5">
+        <label><span style={lab}>Your name</span><input style={box} value={a.name} onChange={up("name")} placeholder="First and last name" /></label>
+        <label><span style={lab}>Phone or email</span><input style={box} value={a.contact} onChange={up("contact")} placeholder="How Payton can reach you" /></label>
+        <label><span style={lab}>Which coaching are you applying for?</span>
+          <select style={box} value={a.plan} onChange={up("plan")}>
+            {["Standard Coaching", "Pro Coaching", "One-Time (1 month)", "Not sure yet"].map((x) => <option key={x}>{x}</option>)}
+          </select>
+        </label>
+        <label><span style={lab}>Main goal</span>
+          <select style={box} value={a.goal} onChange={up("goal")}>
+            {["Lose fat", "Build muscle", "Recomposition", "Hyrox / endurance", "General health & strength"].map((x) => <option key={x}>{x}</option>)}
+          </select>
+        </label>
+        <label><span style={lab}>Days a week you can train</span>
+          <select style={box} value={a.days} onChange={up("days")}>{["2", "3", "4", "5", "6", "7"].map((x) => <option key={x}>{x}</option>)}</select>
+        </label>
+        <label className="md:col-span-2"><span style={lab}>Anything Payton should know? <span style={{ color: MUTED, fontWeight: 400 }}>(optional)</span></span>
+          <textarea style={{ ...box, minHeight: 92, resize: "vertical" }} value={a.note} onChange={up("note")} placeholder="Injuries, schedule, what you've tried before…" />
+        </label>
+      </div>
+      <SiteBtn onClick={send} style={{ width: "100%", marginTop: 22, fontSize: 16, padding: "16px 22px" }}>Send my application <ArrowUpRight size={18} /></SiteBtn>
+      {msg && <p style={{ ...fontBody, color: PAPER, fontSize: 14, textAlign: "center", marginTop: 14, marginBottom: 0 }}>{msg}</p>}
+    </div>
+  );
+}
+
+function MarketingSite({ onOpenApp }) {
+  const [applyPlan, setApplyPlan] = useState("");
+  const [openFaq, setOpenFaq] = useState(0);
+  const std = PLANS.find((p) => p.id === "standard"), pro = PLANS.find((p) => p.id === "pro");
+  const one = PLANS.find((p) => p.id === "onetime"), basic = PLANS.find((p) => p.id === "basic");
+  const go = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth" }); };
+  const apply = (plan) => { setApplyPlan(plan || ""); go("apply"); };
+  useEffect(() => { document.documentElement.style.scrollBehavior = "smooth"; return () => { document.documentElement.style.scrollBehavior = ""; }; }, []);
+
+  const tierCard = (p, { label, badge, desc, best, include, cta }) => (
+    <div style={{ background: SURFACE, border: `1px solid ${badge ? RED : LINE}`, borderRadius: 20, padding: "clamp(22px, 3.5vw, 34px)", display: "flex", flexDirection: "column", boxShadow: badge ? "0 0 60px rgba(217,4,41,0.12)" : "none" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em" }} className="uppercase">{label}</div>
+        {badge && <span style={{ ...fontBody, color: RED, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", border: `1px solid ${RED}`, borderRadius: 8, padding: "4px 10px", background: "rgba(217,4,41,0.10)", whiteSpace: "nowrap" }} className="uppercase">{badge}</span>}
+      </div>
+      <h3 style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: "clamp(30px, 4.5vw, 40px)", lineHeight: 1.05, margin: "18px 0 0" }} className="uppercase">{p.name}</h3>
+      <div className="flex items-baseline gap-2 flex-wrap" style={{ marginTop: 14 }}>
+        <span style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 40, lineHeight: 1 }}>${money(p.monthly)}</span>
+        <span style={{ ...fontBody, color: MUTED, fontSize: 15 }}>/month</span>
+        <span style={{ ...fontBody, color: PAPER, fontSize: 14, fontWeight: 600, marginLeft: 6 }}>or ${money(p.pifMonthly)}/mo paid in full</span>
+      </div>
+      <p style={{ ...fontBody, color: MUTED, fontSize: 15.5, lineHeight: 1.65, marginTop: 14 }}>{desc}</p>
+      <h4 style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 18, margin: "18px 0 12px" }} className="uppercase">What's included</h4>
+      <ul className="space-y-3" style={{ margin: 0, padding: 0, listStyle: "none" }}>{include.map((x) => <CheckLi key={x}>{x}</CheckLi>)}</ul>
+      <div style={{ borderTop: `1px solid ${LINE}`, marginTop: 22, paddingTop: 18 }}>
+        <h4 style={{ ...fontDisplay, fontWeight: 700, color: RED, fontSize: 16, margin: 0 }} className="uppercase">Best for</h4>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 14.5, lineHeight: 1.6, margin: "8px 0 0" }}>{best}</p>
+      </div>
+      <div style={{ marginTop: "auto", paddingTop: 24 }}>
+        <SiteBtn solid={!!badge} onClick={() => apply(p.name)} style={{ width: "100%", letterSpacing: "0.04em" }}>{cta} <ArrowUpRight size={17} /></SiteBtn>
+      </div>
+    </div>
+  );
+
+  const yes = <span className="inline-flex items-center gap-1" style={{ color: PAPER, fontWeight: 600 }}><Check size={15} color={RED} strokeWidth={3} /> Included</span>;
+  const no = <span style={{ color: MUTED }}>Not included</span>;
+  const diffRows = [
+    ["Customized training", yes, yes, yes, "AI-built"],
+    ["Personalized nutrition", yes, yes, yes, "AI-built"],
+    ["Check-ins", "Weekly", "2× a month", "Weekly", no],
+    ["1:1 coaching call", no, "Monthly", "Weekly", no],
+    ["Program adjustments", "Once", "2× a month", "Weekly & as needed", "Anytime with AI"],
+    ["Messaging", "24–48 hrs", "24–48 hrs", "Same day", no],
+    ["Community chat", yes, yes, yes, no],
+    ["In-person sessions", "Add-on", "Add-on", "Priority booking", no],
+    ["Price", "$300 · 1 month", "$250/mo · $200 PIF", "$350/mo · $300 PIF", "$4.99 once"],
+  ];
+  const navLink = { ...fontBody, color: PAPER, fontSize: 14.5, fontWeight: 500, background: "none", border: "none", cursor: "pointer", padding: "6px 2px" };
+
+  return (
+    <div style={{ background: INK, color: PAPER, minHeight: "100vh" }}>
+      {/* nav */}
+      <header style={{ position: "sticky", top: 0, zIndex: 60, background: "var(--ink-glass)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", borderBottom: `1px solid ${LINE}` }}>
+        <div className="flex items-center justify-between gap-3" style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 20px" }}>
+          <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="pd / performance — top of page" className="flex items-baseline gap-2" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            <span style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 24, fontWeight: 500, textTransform: "lowercase" }}>pd</span>
+            <span style={{ color: RED, fontWeight: 700, fontSize: 20, transform: "skewX(-12deg)", display: "inline-block" }} aria-hidden="true">/</span>
+            <span style={{ ...fontDisplay, color: PAPER, fontSize: 17, fontWeight: 500, letterSpacing: "0.16em" }} className="hidden sm:inline">PERFORMANCE</span>
+          </button>
+          <nav className="hidden md:flex items-center gap-7" aria-label="Site">
+            <button style={navLink} onClick={() => go("whats-included")}>What's Included</button>
+            <button style={navLink} onClick={() => go("app-preview")}>The App</button>
+            {SITE_RESULTS.length > 0 && <button style={navLink} onClick={() => go("results")}>Results</button>}
+            <button style={navLink} onClick={() => go("about")}>About</button>
+            <button style={navLink} onClick={() => go("apply")}>Contact</button>
+          </nav>
+          <div className="flex items-center gap-2">
+            <button onClick={() => onOpenApp()} className="flex items-center gap-1" style={{ ...fontBody, fontWeight: 700, fontSize: 14, color: PAPER, background: "transparent", border: `1.5px solid ${LINE}`, borderRadius: 10, padding: "9px 13px", cursor: "pointer" }}>
+              <Smartphone size={15} /> Open app
+            </button>
+            <button onClick={() => apply("")} style={{ ...fontBody, fontWeight: 700, fontSize: 14, color: "#fff", background: RED, border: "none", borderRadius: 10, padding: "10px 14px", cursor: "pointer" }}>
+              Apply<span className="hidden sm:inline"> for Coaching</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* hero */}
+      <section style={{ padding: "clamp(48px, 9vw, 110px) 0 clamp(56px, 9vw, 110px)", background: "radial-gradient(ellipse 60% 50% at 80% 40%, rgba(217,4,41,0.13), transparent 70%)" }}>
+        <div className="grid md:grid-cols-2 gap-12 items-center" style={{ maxWidth: 1180, margin: "0 auto", padding: "0 20px" }}>
+          <div>
+            <SiteKicker>Online coaching by Payton Dray</SiteKicker>
+            <h1 style={{ ...fontDisplay, fontWeight: 700, fontSize: "clamp(40px, 10.5vw, 80px)", lineHeight: 0.95, margin: 0, color: PAPER }} className="uppercase">
+              Train harder.<br />Eat smarter.<br /><span style={{ color: RED }}>Stay accountable.</span>
+            </h1>
+            <div style={{ ...fontDisplay, fontWeight: 600, color: RED, fontSize: "clamp(20px, 3vw, 26px)", marginTop: 14 }}>Consistency beats complexity.</div>
+            <SiteLead>Personalized training, nutrition, and accountability coaching — built around your schedule and your goals, and run from an app that keeps you honest every day.</SiteLead>
+            <div className="flex flex-wrap gap-3" style={{ marginTop: 28 }}>
+              <SiteBtn onClick={() => go("whats-included")}>Explore Coaching Options</SiteBtn>
+              <SiteBtn solid={false} onClick={() => go("difference")}>See What's Included</SiteBtn>
+            </div>
+            <div className="flex flex-wrap gap-3" style={{ marginTop: 12 }}>
+              <SiteBtn solid={false} onClick={() => go("macros")} style={{ border: "none", padding: "12px 4px" }}><Calculator size={16} color={RED} /> Find Your Calories & Macros →</SiteBtn>
+              <SiteBtn solid={false} onClick={() => go("consultation")} style={{ border: "none", padding: "12px 4px" }}><CalendarDays size={16} color={RED} /> Book a 1:1 Consultation Call</SiteBtn>
+            </div>
+          </div>
+          <div className="flex justify-center gap-5 items-end">
+            <div style={{ width: "min(290px, 72vw)" }}><PhoneShot src="./assets/shot-train.jpg" /></div>
+            <div className="hidden lg:block" style={{ width: 220, marginBottom: -30 }}><PhoneShot src="./assets/shot-track.jpg" tilt={4} /></div>
+          </div>
+        </div>
+      </section>
+
+      {/* coaching levels */}
+      <SiteSection id="whats-included">
+        <SiteH2 center accent="level of coaching">Choose your</SiteH2>
+        <SiteLead center>Two levels of personalized coaching. One goal: helping you build your best body. Choose the level of guidance, accountability, and support that fits your goals and your life.</SiteLead>
+        <div className="grid md:grid-cols-2 gap-6" style={{ marginTop: 48 }}>
+          {tierCard(std, {
+            label: "Biweekly 1:1 coaching",
+            desc: "Personalized training and nutrition coaching for people who want expert programming, a structured plan, and consistent progress reviews — while staying independent between check-ins.",
+            include: ["Fully customized training program", "Personalized calorie & macro targets", "Nutrition plan built around foods you like", "Check-ins 2× a month — 1st & 3rd Monday", "Monthly 15-minute 1:1 coaching call", "Program & nutrition updated twice a month", "Messaging with a response within 24–48 hours", "Full app access + community chat"],
+            best: "Self-motivated people who want professional programming, clear direction, and accountability twice a month without needing hands-on coaching every week.",
+            cta: "Apply for Standard",
+          })}
+          {tierCard(pro, {
+            label: "Premium weekly 1:1 coaching", badge: "Most hands-on",
+            desc: "The most comprehensive coaching I offer. Built for people who want high-touch accountability, frequent adjustments, and direct access to me throughout their transformation.",
+            include: ["Everything in Standard Coaching", "Weekly check-ins — every Monday", "Weekly 15-minute 1:1 coaching call", "Program & nutrition updated every week", "Priority messaging — same-day response", "Exercise form feedback on your videos", "Priority scheduling for in-person sessions"],
+            best: "People who want more personal attention, faster feedback, closer accountability, and a coach who's involved every single week.",
+            cta: "Apply for Pro",
+          })}
+        </div>
+        <div className="grid md:grid-cols-2 gap-6" style={{ marginTop: 24 }}>
+          {[[one, "Try one month", "A month working directly with Payton — a personalized program and nutrition plan, weekly check-ins, messaging, and community chat. Doesn't renew.", "Apply for One-Time", () => apply(one.name + " (1 month)")],
+            [basic, "Just the app", "The full app with the AI as your coach. It builds your split and meal plan and answers your questions. No direct access to Payton and no community chat.", "Get the app — $4.99", () => onOpenApp("pricing")]].map(([p, k, d, cta, fn]) => (
+            <div key={p.id} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 20, padding: "clamp(20px, 3vw, 28px)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div style={{ ...fontBody, color: RED, fontSize: 12.5, fontWeight: 700, letterSpacing: "0.1em" }} className="uppercase">{k}</div>
+                  <h3 style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 30, margin: "8px 0 0" }} className="uppercase">{p.name}</h3>
+                </div>
+                <div style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 34, whiteSpace: "nowrap" }}>${money(p.price)}</div>
+              </div>
+              <p style={{ ...fontBody, color: MUTED, fontSize: 15, lineHeight: 1.6, margin: "10px 0 18px" }}>{d}</p>
+              <SiteBtn solid={false} onClick={fn}>{cta} <ArrowUpRight size={16} /></SiteBtn>
+            </div>
+          ))}
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 14.5, textAlign: "center", marginTop: 22 }}>
+          Add weekly in-person training to One-Time or any coaching plan for ${ADDON.price}/month.
+        </p>
+      </SiteSection>
+
+      {/* difference table */}
+      <SiteSection id="difference">
+        <SiteH2 center accent="difference?">What's the</SiteH2>
+        <SiteLead center>Every coaching plan is built entirely around you. The difference is how closely we work together.</SiteLead>
+        <div style={{ overflowX: "auto", marginTop: 40, WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", minWidth: 680, borderCollapse: "collapse", ...fontBody, fontSize: 15 }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${LINE}` }}>
+                <th style={{ textAlign: "left", color: MUTED, fontWeight: 600, padding: "16px 12px" }}>Coaching feature</th>
+                {["One-Time", "Standard", "Pro", "Basic app"].map((h) => (
+                  <th key={h} style={{ color: h === "Pro" ? RED : PAPER, fontWeight: 700, padding: "16px 12px", background: h === "Pro" ? "rgba(217,4,41,0.07)" : "transparent" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {diffRows.map(([lab, ...vals]) => (
+                <tr key={lab} style={{ borderBottom: `1px solid ${LINE}` }}>
+                  <td style={{ color: MUTED, padding: "16px 12px", fontWeight: 500 }}>{lab}</td>
+                  {vals.map((v, i) => (
+                    <td key={i} style={{ textAlign: "center", color: PAPER, padding: "16px 10px", fontWeight: 500, background: i === 2 ? "rgba(217,4,41,0.07)" : "transparent" }}>{v}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SiteSection>
+
+      {/* coaching FAQ */}
+      <SiteSection id="faq">
+        <SiteH2 center accent="FAQ">Coaching</SiteH2>
+        <div style={{ maxWidth: 820, margin: "36px auto 0" }}>
+          {COACHING_FAQ.map((f, i) => (
+            <div key={f.q} style={{ borderTop: `1px solid ${LINE}`, borderBottom: i === COACHING_FAQ.length - 1 ? `1px solid ${LINE}` : "none" }}>
+              <button onClick={() => setOpenFaq(openFaq === i ? -1 : i)} aria-expanded={openFaq === i} className="flex items-center justify-between gap-4 w-full"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "20px 0", textAlign: "left" }}>
+                <span style={{ ...fontDisplay, fontWeight: 600, color: PAPER, fontSize: 19, lineHeight: 1.3 }}>{f.q}</span>
+                <ChevronDown size={20} color={RED} style={{ flexShrink: 0, transform: openFaq === i ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+              </button>
+              {openFaq === i && <p style={{ ...fontBody, color: MUTED, fontSize: 15.5, lineHeight: 1.7, margin: "0 0 20px" }}>{f.a}</p>}
+            </div>
+          ))}
+        </div>
+      </SiteSection>
+
+      {/* inside the app */}
+      <SiteSection id="app-preview">
+        <SiteH2 center accent="the app">Inside</SiteH2>
+        <SiteLead center>Your coaching dashboard — workouts, meals, check-ins, accountability, and messaging in one place.</SiteLead>
+        <div className="flex items-center gap-4" style={{ maxWidth: 420, margin: "32px auto 0", background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 18, padding: 14 }}>
+          <img src="./icon-192.png" alt="" style={{ width: 72, height: 72, borderRadius: 16, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...fontBody, color: PAPER, fontSize: 18, fontWeight: 700 }}>pd / performance</div>
+            <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Health & Fitness</div>
+          </div>
+          <button onClick={() => onOpenApp()} style={{ ...fontBody, fontWeight: 700, fontSize: 15, color: "#fff", background: RED, border: "none", borderRadius: 99, padding: "9px 20px", cursor: "pointer" }}>Open</button>
+        </div>
+        <div className="grid md:grid-cols-3 gap-10" style={{ marginTop: 48 }}>
+          <PhoneShot src="./assets/shot-train.jpg" caption="Your training" />
+          <PhoneShot src="./assets/shot-fuel.jpg" caption="Your nutrition" />
+          <PhoneShot src="./assets/shot-track.jpg" caption="Your accountability" />
+        </div>
+        <div className="grid md:grid-cols-3 gap-4" style={{ marginTop: 48 }}>
+          {[[Smartphone, "Put it on your phone", "On iPhone, open this site in Safari, tap Share, then “Add to Home Screen.” It opens full-screen like any other app."],
+            [Sparkles, "AI coach built in", "Talk through a split, build a meal plan, or ask a question any time — and log up to 7 days late."],
+            [MessageCircle, "Coach in your pocket", "Daily check-off, weekly check-ins, and one tap to text your coach your day."]].map(([I, t, d]) => (
+            <div key={t} style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 20 }}>
+              <I size={22} color={RED} />
+              <div style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 20, marginTop: 10 }} className="uppercase">{t}</div>
+              <p style={{ ...fontBody, color: MUTED, fontSize: 14.5, lineHeight: 1.6, margin: "6px 0 0" }}>{d}</p>
+            </div>
+          ))}
+        </div>
+      </SiteSection>
+
+      {/* meet Payton */}
+      <SiteSection id="about">
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div style={{ borderRadius: 22, overflow: "hidden", border: `1px solid ${LINE}`, aspectRatio: "4 / 5", maxHeight: 620, background: `radial-gradient(ellipse at 50% 30%, rgba(217,4,41,0.25), transparent 65%), ${SURFACE}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {SITE_COACH_PHOTO
+              ? <img src={SITE_COACH_PHOTO} alt="Payton Dray" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <div className="flex items-baseline gap-3">
+                  <span style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 120, fontWeight: 500 }}>pd</span>
+                  <span style={{ color: RED, fontWeight: 700, fontSize: 96, transform: "skewX(-12deg)", display: "inline-block" }}>/</span>
+                </div>}
+          </div>
+          <div>
+            <SiteKicker>Your coach</SiteKicker>
+            <SiteH2 accent="Payton">Meet</SiteH2>
+            <p style={{ ...fontBody, color: PAPER, fontSize: 17, lineHeight: 1.7, marginTop: 18 }}>
+              I'm Payton Dray, a personal trainer and the founder of PD Performance.
+            </p>
+            <p style={{ ...fontBody, color: MUTED, fontSize: 16, lineHeight: 1.7, marginTop: 12 }}>
+              Most people don't struggle because they lack motivation — they struggle because they've been handed plans that don't fit their life. I built PD Performance to fix that: a program built around your schedule, food you'll actually eat, and someone in your corner making sure you show up.
+            </p>
+            <p style={{ ...fontBody, color: PAPER, fontSize: 16, fontWeight: 700, marginTop: 18 }}>Coaching is built on four pillars:</p>
+            <ul className="space-y-3" style={{ margin: "12px 0 0", padding: 0, listStyle: "none" }}>
+              {["Progressive strength training", "Protein-first nutrition you can stick to", "Conditioning that builds an engine — not just a physique", "Real, daily accountability"].map((x) => <CheckLi key={x}>{x}</CheckLi>)}
+            </ul>
+            <p style={{ ...fontBody, color: MUTED, fontSize: 16, lineHeight: 1.7, marginTop: 18 }}>No crash diets. No cookie-cutter plans. No guessing.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-4" style={{ marginTop: 64, textAlign: "center" }}>
+          {[["1:1", "Personal coaching"], ["100%", "Personalized programming"], ["24/7", "AI coach in the app"]].map(([n, l]) => (
+            <div key={l}>
+              <div style={{ ...fontDisplay, fontWeight: 700, color: RED, fontSize: "clamp(40px, 7vw, 64px)", lineHeight: 1 }}>{n}</div>
+              <div style={{ ...fontBody, color: PAPER, fontSize: "clamp(11px, 1.8vw, 14px)", fontWeight: 600, letterSpacing: "0.1em", marginTop: 8 }} className="uppercase">{l}</div>
+            </div>
+          ))}
+        </div>
+      </SiteSection>
+
+      {/* results — appears once real client results are added */}
+      {SITE_RESULTS.length > 0 && (
+        <SiteSection id="results">
+          <SiteH2 center accent="results">Real clients. Real</SiteH2>
+          <div className="grid md:grid-cols-3 gap-6" style={{ marginTop: 40 }}>
+            {SITE_RESULTS.map((r) => (
+              <figure key={r.name} style={{ margin: 0, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 18, overflow: "hidden" }}>
+                {r.photo && <img src={r.photo} alt={`${r.name} results`} style={{ width: "100%", display: "block" }} />}
+                <figcaption style={{ padding: 18 }}>
+                  <p style={{ ...fontBody, color: PAPER, fontSize: 15, lineHeight: 1.6, margin: 0 }}>“{r.quote}”</p>
+                  <div style={{ ...fontDisplay, fontWeight: 700, color: RED, fontSize: 16, marginTop: 10 }} className="uppercase">{r.name}</div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </SiteSection>
+      )}
+
+      {/* consultation */}
+      <SiteSection id="consultation">
+        <div className="grid md:grid-cols-2 gap-10 items-center">
+          <div>
+            <SiteKicker>1-on-1 consultation call</SiteKicker>
+            <SiteH2 accent={`${CONSULT.minutes} minutes`}>Pick my brain —</SiteH2>
+            <SiteLead>Bring anything you're stuck on or want to understand — training, nutrition, supplements, Hyrox, your schedule. We'll go through it together and you'll leave with clear answers and a plan.</SiteLead>
+            <ul className="space-y-3" style={{ margin: "22px 0 0", padding: 0, listStyle: "none" }}>
+              {["Nutrition, calories, and macros", "Training split and program design", "Fat loss, muscle gain, or recomposition", "Whether coaching is the right fit for you"].map((x) => <CheckLi key={x}>{x}</CheckLi>)}
+            </ul>
+          </div>
+          <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 20, padding: 28, boxShadow: "0 0 70px rgba(217,4,41,0.10)" }}>
+            <div style={{ width: 52, height: 52, borderRadius: 99, background: "rgba(217,4,41,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}><CalendarDays size={24} color={RED} /></div>
+            <h3 style={{ ...fontDisplay, fontWeight: 700, color: PAPER, fontSize: 32, margin: "18px 0 4px" }} className="uppercase">Consultation call</h3>
+            <p style={{ ...fontBody, color: MUTED, fontSize: 15, margin: 0 }}>{CONSULT.minutes} minutes, one-on-one with Payton over video call.</p>
+            <div className="flex items-center justify-between" style={{ borderTop: `1px solid ${LINE}`, marginTop: 20, paddingTop: 16 }}>
+              <span style={{ ...fontBody, color: MUTED, fontSize: 15 }}>Price</span>
+              <span style={{ ...fontDisplay, fontWeight: 700, color: RED, fontSize: 34 }}>${CONSULT.price}</span>
+            </div>
+            <SiteBtn onClick={() => { if (SITE_CONTACT.calendar) window.open(SITE_CONTACT.calendar, "_blank"); else apply("Consultation call"); }} style={{ width: "100%", marginTop: 18 }}>
+              <CalendarDays size={17} /> Book Your Consultation Call
+            </SiteBtn>
+          </div>
+        </div>
+      </SiteSection>
+
+      {/* calories & macros */}
+      <SiteSection id="macros">
+        <SiteKicker center>Free tool</SiteKicker>
+        <SiteH2 center accent="calories & macros">Find your</SiteH2>
+        <SiteLead center>Plug in your numbers for a solid starting target. The app turns it into a full meal plan built around foods you like.</SiteLead>
+        <MacroCalculator onOpenApp={onOpenApp} />
+      </SiteSection>
+
+      {/* apply */}
+      <SiteSection id="apply" style={{ background: "radial-gradient(ellipse 55% 45% at 50% 60%, rgba(217,4,41,0.10), transparent 70%)" }}>
+        <SiteH2 center accent="to get to work?">Ready</SiteH2>
+        <SiteLead center>Apply for coaching below. Payton reviews every application personally and will reach out to get you started.</SiteLead>
+        <ApplyForm initialPlan={applyPlan} />
+      </SiteSection>
+
+      <footer style={{ borderTop: `1px solid ${LINE}`, padding: "28px 20px", textAlign: "center" }}>
+        <div className="flex flex-wrap justify-center gap-6" style={{ marginBottom: 14 }}>
+          {[["What's Included", () => go("whats-included")], ["The App", () => onOpenApp()], ["Training FAQ", () => onOpenApp("faq")], ["Apply", () => go("apply")]].map(([t, fn]) => (
+            <button key={t} onClick={fn} style={{ ...fontBody, color: PAPER, fontSize: 14, fontWeight: 500, background: "none", border: "none", cursor: "pointer" }}>{t}</button>
+          ))}
+        </div>
+        <p style={{ ...fontBody, color: MUTED, fontSize: 13.5, margin: 0 }}>© {new Date().getFullYear()} pd / performance by Payton Dray. All rights reserved.</p>
+      </footer>
+    </div>
+  );
+}
+
+
+/* browser visitors land on the website; the home-screen app (and signed-in users) go straight to the app */
+const initialSite = (() => {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has("app") || q.has("client")) return false;
+    if (q.has("site")) return true;
+    if ((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone) return false;
+    if (window.storage) return false;
+    return !localStorage.getItem(`pt-web:${STORAGE_NS}pt:session`);
+  } catch (e) { return false; }
+})();
+
 export default function App() {
+  const [showSite, setShowSite] = useState(initialSite);
   const [tab, setTab] = useState("profile");
   const [page, setPage] = useState("home");
   const [loaded, setLoaded] = useState(false);
@@ -5474,7 +6002,7 @@ export default function App() {
   const [progress, setProgressState] = useState([]);
   const [posts, setPostsState] = useState([]);
   const [bookings, setBookingsState] = useState([]);
-  const [trainerCfg, setTrainerCfgState] = useState({ venmo: "", stripe: "", pin: "4343", calendar: "" });
+  const [trainerCfg, setTrainerCfgState] = useState({ venmo: SITE_CONTACT.venmo, stripe: SITE_CONTACT.stripe, pin: "4343", calendar: SITE_CONTACT.calendar });
   const [trainerMode, setTrainerMode] = useState(false);
   const [showTrainerPanel, setShowTrainerPanel] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
@@ -5510,7 +6038,7 @@ export default function App() {
       if (cs) setCustomSplitState(cs);
       if (pg) setProgressState(pg);
       if (ps) setPostsState(ps);
-      if (tc) setTrainerCfgState(tc);
+      if (tc) setTrainerCfgState((d) => { const m = { ...d }; Object.keys(tc).forEach((k) => { if (tc[k] !== "" && tc[k] != null) m[k] = tc[k]; }); return m; });
       if (bk) setBookingsState(bk);
       if (th) setThemeState(th);
       if (se) setSessionState(se);
@@ -5760,16 +6288,16 @@ export default function App() {
   return (
     <div className={theme === "light" ? "pd-light" : "pd-dark"} style={{ background: INK, minHeight: "100vh", ...fontBody }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Great+Vibes&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Great+Vibes&display=swap');
         /* dark palette — light is its exact RGB inversion (red accent stays) */
         .pd-dark {
           --ink:#0A0A0B; --surface:#141416; --surface2:#1B1B1E; --line:#26262B;
-          --paper:#F5F5F2; --muted:#8B8B94; --red:#D90429;
+          --paper:#F7F7F4; --muted:#B4B4BC; --red:#D90429;
           --ink-glass:rgba(10,10,11,0.95); --ink-glass2:rgba(10,10,11,0.96);
         }
         .pd-light {
           --ink:#F5F5F4; --surface:#EBEBE9; --surface2:#E4E4E1; --line:#D9D9D4;
-          --paper:#0A0A0D; --muted:#74746B; --red:#D90429;
+          --paper:#0A0A0D; --muted:#4C4C46; --red:#D90429;
           --ink-glass:rgba(245,245,244,0.95); --ink-glass2:rgba(245,245,244,0.96);
         }
         * { box-sizing: border-box; }
@@ -5795,6 +6323,12 @@ export default function App() {
         @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
       `}</style>
 
+      {showSite ? <MarketingSite onOpenApp={(to) => {
+        setShowSite(false);
+        if (["train", "fuel", "track", "profile"].includes(to)) { setTab(to); setPage("home"); }
+        else if (to === "pricing" || to === "faq") setPage(to);
+        try { window.scrollTo(0, 0); } catch (e) {}
+      }} /> : <>
       {/* header — menu left, brand centered, theme + avatar right */}
       <header className="sticky top-0" style={{ background: "var(--ink-glass)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${LINE}`, zIndex: 50 }}>
       <div className="flex items-center justify-between px-4 py-3" style={{ position: "relative" }}>
@@ -5858,6 +6392,12 @@ export default function App() {
                 <ChevronRight size={14} color={page === id ? RED : MUTED} />
               </button>
             ))}
+            <button onClick={() => { setShowSite(true); setShowMenu(false); try { window.scrollTo(0, 0); } catch (e) {} }}
+              className="flex items-center justify-between w-full"
+              style={{ ...fontDisplay, fontSize: 13, letterSpacing: "0.14em", background: "none", border: "none", borderLeft: "3px solid transparent", borderRadius: 10, cursor: "pointer", padding: "11px 12px", color: PAPER, textAlign: "left" }}>
+              <span className="uppercase">Website</span>
+              <ArrowUpRight size={14} color={MUTED} />
+            </button>
             <div style={{ borderTop: `1px solid ${LINE}`, margin: "14px 0" }} />
             <button onClick={() => { setShowCoach(true); setShowMenu(false); }} className="flex items-center gap-3 w-full"
               style={{ background: RED, border: "none", borderRadius: 12, cursor: "pointer", padding: "11px 12px", textAlign: "left" }}>
@@ -6061,6 +6601,7 @@ export default function App() {
       {/* login gate — shown until signed in */}
       {loaded && !session && <LoginGate onLogin={(provider) => setSession({ provider, at: Date.now() })}
         onPin={(pin) => clientPinLogin(pin, trainerCfg.clients)} />}
+      </>}
     </div>
   );
 }
