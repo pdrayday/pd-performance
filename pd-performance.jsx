@@ -5113,7 +5113,7 @@ const PREVIEW_FRAMES = [
   },
 ];
 
-function LoginGate({ onLogin, onPin }) {
+function LoginGate({ onLogin, onPin, onSite }) {
   const [pin, setPin] = useState("");
   const [pinErr, setPinErr] = useState(false);
   const [i, setI] = useState(0);
@@ -5125,6 +5125,12 @@ function LoginGate({ onLogin, onPin }) {
   const Icon = f.icon;
   return (
     <div className="fixed inset-0 overflow-y-auto" style={{ background: INK, zIndex: 80 }}>
+      {onSite && !IS_PHONE && (
+        <button onClick={onSite} className="flex items-center gap-1"
+          style={{ ...fontBody, fontWeight: 600, fontSize: 14, color: PAPER, background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 13px", cursor: "pointer", position: "absolute", top: 16, left: 16 }}>
+          <ChevronLeft size={16} /> Back to website
+        </button>
+      )}
       <div className="mx-auto px-5 py-8 flex flex-col" style={{ maxWidth: 420, minHeight: "100%" }}>
         <div className="flex items-baseline gap-2 justify-center">
           <span style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 27, fontWeight: 400, textTransform: "lowercase" }}>pd</span>
@@ -5194,6 +5200,12 @@ function LoginGate({ onLogin, onPin }) {
             style={{ ...fontBody, background: "none", color: MUTED, border: "none", fontSize: 13, cursor: "pointer", padding: 6 }}>
             Continue without an account
           </button>
+          {onSite && (
+            <button onClick={onSite} className="w-full flex items-center justify-center gap-1"
+              style={{ ...fontBody, background: "none", color: PAPER, border: `1px solid ${LINE}`, borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: "11px 16px" }}>
+              See coaching plans & pricing <ChevronRight size={15} color={RED} />
+            </button>
+          )}
         </div>
         <p style={{ ...fontBody, color: MUTED, fontSize: 11, textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
           Your training data is stored privately on this device.
@@ -5646,7 +5658,7 @@ function ApplyForm({ initialPlan }) {
   );
 }
 
-function MarketingSite({ onOpenApp }) {
+function MarketingSite({ onOpenApp, signedIn }) {
   const [applyPlan, setApplyPlan] = useState("");
   const [openFaq, setOpenFaq] = useState(0);
   const std = PLANS.find((p) => p.id === "standard"), pro = PLANS.find((p) => p.id === "pro");
@@ -5714,7 +5726,7 @@ function MarketingSite({ onOpenApp }) {
           </nav>
           <div className="flex items-center gap-2">
             <button onClick={() => onOpenApp()} className="flex items-center gap-1" style={{ ...fontBody, fontWeight: 700, fontSize: 14, color: PAPER, background: "transparent", border: `1.5px solid ${LINE}`, borderRadius: 10, padding: "9px 13px", cursor: "pointer" }}>
-              <Smartphone size={15} /> Open app
+              <Smartphone size={15} /> {signedIn ? "Open app" : "Log in"}
             </button>
             <button onClick={() => apply("")} style={{ ...fontBody, fontWeight: 700, fontSize: 14, color: "#fff", background: RED, border: "none", borderRadius: 10, padding: "10px 14px", cursor: "pointer" }}>
               Apply<span className="hidden sm:inline"> for Coaching</span>
@@ -5975,19 +5987,44 @@ function MarketingSite({ onOpenApp }) {
 
 
 /* browser visitors land on the website; the home-screen app (and signed-in users) go straight to the app */
-const initialSite = (() => {
+/* computer → the website (until you choose "Open app");
+   phone / home-screen app → the app itself (login screen with the app preview until signed in) */
+const IS_PHONE = (() => {
   try {
-    const q = new URLSearchParams(location.search);
-    if (q.has("app") || q.has("client")) return false;
-    if (q.has("site")) return true;
-    if ((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone) return false;
-    if (window.storage) return false;
-    return !localStorage.getItem(`pt-web:${STORAGE_NS}pt:session`);
+    if ((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone) return true;
+    if (/iPhone|iPod|Android.+Mobile|Mobile.+Firefox/i.test(navigator.userAgent)) return true;
+    return !!(window.matchMedia && matchMedia("(max-width: 767px) and (pointer: coarse)").matches);
   } catch (e) { return false; }
 })();
+const siteFromUrl = () => {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has("site")) return true;
+    if (q.has("app") || q.has("client")) return false;
+    if (window.storage) return false;
+    return !IS_PHONE;
+  } catch (e) { return false; }
+};
+/* move between website and app with real browser history, so Back always works */
+const pushRoute = (toSite) => {
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete("site"); u.searchParams.delete("app");
+    if (toSite && IS_PHONE) u.searchParams.set("site", "");
+    if (!toSite && !IS_PHONE) u.searchParams.set("app", "");
+    const href = u.pathname + u.search.replace(/=(&|$)/g, "$1") + u.hash;
+    if (href !== location.pathname + location.search + location.hash) history.pushState({ pdSite: toSite }, "", href);
+  } catch (e) {}
+};
 
 export default function App() {
-  const [showSite, setShowSite] = useState(initialSite);
+  const [showSite, setShowSiteState] = useState(siteFromUrl);
+  const setShowSite = (v) => { pushRoute(v); setShowSiteState(v); try { window.scrollTo(0, 0); } catch (e) {} };
+  useEffect(() => {
+    const onPop = () => setShowSiteState(siteFromUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [tab, setTab] = useState("profile");
   const [page, setPage] = useState("home");
   const [loaded, setLoaded] = useState(false);
@@ -6323,7 +6360,7 @@ export default function App() {
         @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
       `}</style>
 
-      {showSite ? <MarketingSite onOpenApp={(to) => {
+      {showSite ? <MarketingSite signedIn={!!session} onOpenApp={(to) => {
         setShowSite(false);
         if (["train", "fuel", "track", "profile"].includes(to)) { setTab(to); setPage("home"); }
         else if (to === "pricing" || to === "faq") setPage(to);
@@ -6336,6 +6373,12 @@ export default function App() {
           style={{ background: "rgba(217,4,41,0.08)", border: "1px solid rgba(217,4,41,0.35)", borderRadius: 12, padding: "7px 8px", cursor: "pointer", display: "flex", alignItems: "center" }}>
           <Menu size={18} color={RED} />
         </button>
+        {!IS_PHONE && (
+          <button onClick={() => setShowSite(true)} className="hidden md:flex items-center gap-1"
+            style={{ ...fontBody, fontWeight: 600, fontSize: 13.5, color: PAPER, background: "none", border: `1px solid ${LINE}`, borderRadius: 10, padding: "7px 11px", cursor: "pointer", position: "absolute", left: 64 }}>
+            <ChevronLeft size={15} /> Website
+          </button>
+        )}
         <h1 onClick={() => setPage("home")} className="flex items-baseline gap-2" aria-label="PD Performance — online personal training"
           style={{ margin: 0, position: "absolute", left: "50%", transform: "translateX(-50%)", cursor: "pointer", whiteSpace: "nowrap" }}>
           <span className="brand-a" style={{ ...fontDisplay, fontStyle: "italic", color: PAPER, fontSize: 27, fontWeight: 400, letterSpacing: "0.04em", textTransform: "lowercase" }}>pd</span>
@@ -6599,7 +6642,7 @@ export default function App() {
       {showSettings && <SettingsPanel profile={profile} setProfile={setProfile} onClose={() => setShowSettings(false)} />}
 
       {/* login gate — shown until signed in */}
-      {loaded && !session && <LoginGate onLogin={(provider) => setSession({ provider, at: Date.now() })}
+      {loaded && !session && <LoginGate onSite={() => setShowSite(true)} onLogin={(provider) => setSession({ provider, at: Date.now() })}
         onPin={(pin) => clientPinLogin(pin, trainerCfg.clients)} />}
       </>}
     </div>
